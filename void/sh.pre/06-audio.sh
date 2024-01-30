@@ -1,9 +1,8 @@
 #!/bin/sh
 
-# choose the audio setup
 case "${audio_setup:-$(chmenu "Which audio interface do you want to use?" "ALSA" "PipeWire" "PulseAudio" "sndio" "none")}" in
     [aA][lL][sS][aA])
-        export PACKAGES="${PACKAGES:+$PACKAGES }alsa-utils"
+        export PACKAGES="${PACKAGES:+$PACKAGES }alsa-utils alsa-plugins-pulseaudio"
         export SERVICES="${SERVICES:+$SERVICES }alsa"
         btpkg="bluez-alsa"
         ;;
