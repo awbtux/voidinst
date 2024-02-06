@@ -1,9 +1,3 @@
-
-
 [submodule "etc/skel"]
 	path = etc/skel
 	url = https://github.com/awbtux/dotfiles
-[submodule "test"]
-	path = test
-	url = https://github.com/awbtux/dotfiles
-
