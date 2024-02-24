@@ -2,17 +2,17 @@
 
 case "${audio_setup:-$(chmenu "Which audio interface do you want to use?" "ALSA" "PipeWire" "PulseAudio" "sndio" "none")}" in
     [aA][lL][sS][aA])
-        export PACKAGES="${PACKAGES:+$PACKAGES }alsa-utils alsa-plugins-pulseaudio"
+        export PACKAGES="${PACKAGES:+$PACKAGES }alsa-utils"
         export SERVICES="${SERVICES:+$SERVICES }alsa"
         btpkg="bluez-alsa"
         ;;
     [pP][iI][pP][eE][wW][iI][rR][eE]|[pP][iI][pP][eE])
-        export PACKAGES="${PACKAGES:+$PACKAGES }wireplumber pipewire pipewire-pulse"
+        export PACKAGES="${PACKAGES:+$PACKAGES }wireplumber pipewire alsa-pipewire"
         export SERVICES="${SERVICES:+$SERVICES }"
         btpkg="libspa-bluetooth"
         ;;
     [pP][uU][lL][sS][eE][aA][uU][dD][iI][oO]|[pP][uU][lL][sS][eE])
-        export PACKAGES="${PCAKAGES:+$PACKAGES }piulseaudio alsa-plugins-pulseaudio"
+        export PACKAGES="${PCAKAGES:+$PACKAGES }pulseaudio alsa-plugins-pulseaudio"
         ;;
     [sS][nN][dD][iI][oO])
         export PACKAGES="${PACKAGES:+$PACKAGES }sndio aucatctl"

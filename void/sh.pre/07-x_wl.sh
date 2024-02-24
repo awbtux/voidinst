@@ -74,3 +74,13 @@ case "${nvidia_gfxdrivers:-$(chmenu "Would you like to install Nvidia graphics d
         ;;
     *) printf "${0##*/}: error: invalid operand $nvidia_gfxdrivers to option nvidia_gfxdrivers\n"; exit 1 ;;
 esac
+
+
+# ms fonts
+case "${microsoft_fonts:-$(chmenu "Would you like to download microsoft fonts?" "yes" "no")}" in
+    [yY]|[yY]es)
+        microsoft_fonts="y" ;;
+    [nN]|[nN]o)
+        ;;
+    *) printf "${0##*/}: error: invalid operand $microsoft_fonts to option microsoft_fonts\n"; exit 1 ;;
+esac

@@ -7,6 +7,9 @@ case "${partitioning_mode:-$(chmenu 'How should the disk be provisioned?' 'autom
                  *) printf "${0##*/}: error: invalid operand $partitioning_mode for option partitioning_mode\n"; exit 1 ;;
 esac
 
+# dont
+[ "$partitioning_mode" = "m" ] && return
+
 # choose the disk to install void to
 [ -z "$disk" ] && eval "disk=\"$(chmenu "Which disk do you want to use?" $(lsblk -ndo path))\""
 

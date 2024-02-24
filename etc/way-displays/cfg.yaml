@@ -20,17 +20,17 @@ ORDER:
 
 
 # Enable scaling, overrides AUTO_SCALE and SCALE
-SCALING: FALSE
+SCALING: TRUE
 
 # The default is to scale each display by DPI.
 # This may be disabled and scale 1 will be used, unless a SCALE has been specified.
-AUTO_SCALE: TRUE
+AUTO_SCALE: FALSE
 
 
 # Auto scale may be overridden for each display.
 SCALE:
-  #- NAME_DESC: 'monitor description'
-  #  SCALE: 1.75
+  - NAME_DESC: 'eDP-1'
+    SCALE: 1
 
 # Override the preferred mode.
 # WARNING: this may result in an unusable display. See https://github.com/alex-courtis/way-displays#known-issues-with-workarounds

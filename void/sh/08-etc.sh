@@ -21,6 +21,7 @@ cp -rfv "$SCDIR/etc" "$VDIR"
     chroot $VDIR which git && {
         chroot $VDIR git clone --bare "$url" "/etc/skel/.git"
         chroot $VDIR sh -c 'cd /etc/skel/.git && git config --bool core.bare false'
-        chroot $VDIR sh -c 'cd /etc/skel && git reset --hard && git branch --set-upstream-to=origin/main'
+        chroot $VDIR sh -c 'cd /etc/skel && git reset --hard'
+        printf "\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main" >>"$VDIR/etc/skel/.git/config"
     }
 }

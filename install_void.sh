@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 
 # cd to the directory of the script
 _IFS="$IFS"
@@ -111,6 +111,8 @@ done
 
     # store the prefix to partition numbers
     partprefix="$(lsblk -no PATH $disk | awk 'END{print substr($1, 1, length($1)-1)}')"
+
+echo root_fs = $root_fs
 
     # format the root partition with the chosen filesystem
     case "$root_fs" in

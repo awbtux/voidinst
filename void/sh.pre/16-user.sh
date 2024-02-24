@@ -35,3 +35,5 @@ done
 
 # ensure the new users are created
 [ "$userct" -gt 0 ] && create_user="y"
+
+return 0
