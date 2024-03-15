@@ -1,3 +1,0 @@
-[submodule "etc/skel"]
-	path = etc/skel
-	url = https://github.com/awbtux/dotfiles
