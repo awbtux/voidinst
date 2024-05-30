@@ -216,7 +216,7 @@ pkgm() {
         "prt-get sync;prt-get -y $i" "slack$p $u$y|slack$p $i" "o$p $u$y|o$p $i" "eo$p $u-repo;eo$p $i -y" "cards $u;cards $i -y" "urpmi.$u -a;urpmi -a" \
         "dnf $u --refresh;dnf $i -y" "yum check-$u;yum -y $i" "zypper refresh;zypper -n $i" "apt $u;apt $i -y" "pacman -Sy$y|pacman -S" "xbps-$i -Sy" "apk $u;apk add"
     do command -v "${cmd%% *}" >/dev/null 2>&1 && pkgm="$cmd";:
-    done && test "$pkgm" != "${pkgm##${pkgm%%;*};}" && eval "${pkgm%%;*};:" && sleep 1 && pkgm="${pkgm##${pkgm%%;*};}"; eval "$pkgm \"\$@\""
+    done && test "$pkgm" != "${pkgm##${pkgm%%;*};}" && eval "${pkgm%%;*};:" && pkgm="${pkgm##${pkgm%%;*};}"; eval "$pkgm \"\$@\""
 }
 
 # unmount/unswap a disk and things mounted under it
