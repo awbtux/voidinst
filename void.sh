@@ -19,7 +19,7 @@ add_ugrp() { for ugrp in "$@"; do GROUPS="${GROUPS:+$GROUPS,}$ugrp"; done; }
 arch="x86_64"
 
 # whether to create both a BIOS and EFI boot partition, 'y' to enable
-both_efi_bios="y"
+both_efi_bios="n"
 
 # grub target, shouldn't require intervention
 test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(test -d /sys/firmware/efi/efivars -o "$both_efi_bios" = "y" && printf "x86_64-efi" || printf "i386-pc")"
@@ -31,7 +31,7 @@ efi_entry_name="Void Linux"
 filesystem="f2fs"
 
 # mkfs.$filesystem options for root
-fsopts='-l "voidrootfs"'
+mkfs_opts='-l "voidrootfs"'
 
 # printf "$hostname\n" >"$vdir/etc/hostname"
 hostname="Connors-Macbook-Air"
@@ -166,42 +166,34 @@ error() { printf "%s: error: %s\n" "$0" "$1" >&2; exit ${2:-1}; }
 is_empty() { for mty in "$1"/*; do test -e "$mty" && return 1; done; return 0; }
 
 # get properties from block devices
-blk_size()  { test -r "/sys/block/${1##*/}/size" && while IFS= read -r line; do printf "$line"; done <"/sys/block/${1##*/}/size"; }
-blk_model() { test -r "/sys/block/${1##*/}/device/model" && while IFS= read -r line; do printf "$line "; done <"/sys/block/${1##*/}/device/model"; }
+blk_size()  { test -r "/sys/block/${1##*/}/size" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/size"; }
+blk_model() { test -r "/sys/block/${1##*/}/device/model" && while IFS= read -r line; do printf "%s " "$line"; done <"/sys/block/${1##*/}/device/model"; }
 blk_uuid()  { for blk in /dev/disk/by-uuid/*; do case "$(readlink -f "$blk")" in /dev/"${1##*/}"|"$1") printf "${blk##*/}"; return 0; esac; done; return 1; }
 
-# require a command
+# command handlers
 req_cmds() { for rcmd in "$@"; do command -v "$rcmd" >/dev/null 2>&1 || error "$rcmd: command not found" 127; done; return 0; }
+run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*"; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; }
 
-# run a command and handle errors
-run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[0m\033[3m %s %s\033[0m\n" "$cmd" "$*"; "$cmd" "$@" || error "command \`$cmd $*\` returned code $?";:; }
-
-# implement `seq` if it doesn't exist
+# implement missing commands
 command -v seq >/dev/null 2>&1 || seq() { from="$1"; while test "$from" -le "$2"; do printf "$from "; from="$((from+1))"; done; }
-
-# implement `yes` if it doesn't exist
 command -v yes >/dev/null 2>&1 || yes() { while :;do printf "%s\n" "${1:-y}";done; }
-
-# implement 'unset' if it doesn't exist
 command -v unset >/dev/null 2>&1 || eval 'unset() { for _k in "$@"; do eval "$_k="; eval "$_k() { return 127; }"; done; _k=""; }'
 
 # prompt the user for an option and optionally provide the default
-chopt() { printf "\n\033[1m$1\033[22m${2:+ [$2]} " >&2; read userch; test -n "$userch" && printf "$userch" && return; test -n "$2" && printf "$2"; }
+chopt() { printf "\n\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && return; test -n "$2" && printf "$2"; }
 
 # create a menu
 chmenu() {
-    test "$1" = "-n" && nummode="n" && shift; printf "\n\033[1m$1\033[22m\n" >&2; shift
-    for arg in "$@"; do itm="$((itm+1))"; eval "itm$itm=\"$arg\""; done
-    for i in $(seq 1 $itm); do eval "printf \"\033[1m[\033[36m$i\033[39m]\033[22m \$itm$i\n\"" >&2; done
-    while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$i\033[39m]\033[22m " >&2; read inum; test "$inum" -gt "0" -a "$inum" -le "$itm" >&- 2>&- && break; done
-    eval "printf \"${nummode:-\$itm}$inum\""; unset nummode itm
+    printf "\n\033[1m$1\033[22m\n" >&2; shift
+    itmc="$#"; for itm in "$@"; do itmc="$((itmc-1))"; printf "\033[1m[\033[36m%s\033[39m]\033[22m %s\n" "$(($#-itmc))" "$itm" >&2; done
+    while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$#\033[39m]\033[22m " >&2; read inum; test "$inum" -gt "0" -a "$inum" -le "$#" >&- 2>&- && break; done
+    eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
 }
 
 # user creation
 mkuser() {
     test "$(chmenu "Do you want to add a$(test "$userct" -gt 0 2>/dev/null && printf "nother") user?" "yes" "no")" = "no" && return 1
-    test "$(test "$userct" -gt 0 2>/dev/null; printf "$?")" -gt 1 2>/dev/null && userct="0"
-    userct="$((userct+1))"
+    test "$(test "$userct" -gt 0 2>/dev/null; printf "$?")" -gt 1 2>/dev/null && userct="0"; userct="$((userct+1))"
     eval 'user_'"$userct"'_name="$(chopt "What should the new user'"'"'s name be?" "user")"'
     eval 'user_'"$userct"'_comment="$(chopt "What should $user_'"$userct"'_name'"'"'s full name be?" "Default User")"'
     eval 'user_'"$userct"'_password="$(chopt "What should the password for $user_'"$userct"'_name be?" "1234")"'
@@ -238,8 +230,8 @@ prep_disk() {
     main_swaps="$(for mnt in $main_swaps; do printf "$mnt\n" | awk '{print length, $0}'; done | sort -run | awk '{print $2}')"
 
     # disable swaps/mounts
-    test -n "$main_swaps" && for mnt in $main_swaps; do printf "unswap $mnt\n"; swapoff "$mnt" || return 1; done
-    test -n "$main_mounts" && for mnt in $main_mounts; do printf "unmount $mnt\n"; umount -R "$mnt" || return 1; done
+    test -n "$main_swaps" && for mnt in $main_swaps; do nobreak="y" run swapoff -v "$mnt" || return 1; done
+    test -n "$main_mounts" && for mnt in $main_mounts; do nobreak="y" run umount -vR "$mnt" || return 1; done
     return 0
 }
 
@@ -344,16 +336,16 @@ done
 eval "disk=\"\$disk$inum\""
 unset inum
 
-echo disk = /dev/nvme1n1
-disk="/dev/nvme1n1"
+# for my personal safety
+test "$disk" = "/dev/nvme0n1" -o "$disk" = "/dev/sda" -o "$disk" = "/dev/sdb" && error "won't overwrite primary disk" 1
 
 # decide how to partition $disk
-partmethod="$(chmenu -n "Which provisioning scheme would you like to use on $disk?" "Full-disk encryption (automatic)" "No encryption (automatic)" "Swap space, full-disk encryption (automatic)" "Swap space, no encryption (automatic)" "Manual partitioning")"
-test "$partmethod" = "n2" && partmethod="auto"
-test "$partmethod" = "n1" && partmethod="crypt-auto" && is_crypt="y"
-test "$partmethod" = "n4" && partmethod="swap-auto" && is_swap="y"
-test "$partmethod" = "n3" && partmethod="crypt-swap-auto" && is_crypt="y" && is_swap="y"
-test "$partmethod" = "n5" && partmethod="manual"
+partmethod="$(nummode="y" chmenu "Which provisioning scheme would you like to use on $disk?" "Full-disk encryption (automatic)" "No encryption (automatic)" "Swap space, full-disk encryption (automatic)" "Swap space, no encryption (automatic)" "Manual partitioning")"
+test "$partmethod" = "2" && partmethod="auto"
+test "$partmethod" = "1" && partmethod="crypt-auto" && is_crypt="y"
+test "$partmethod" = "4" && partmethod="swap-auto" && is_swap="y"
+test "$partmethod" = "3" && partmethod="crypt-swap-auto" && is_crypt="y" && is_swap="y"
+test "$partmethod" = "5" && partmethod="manual"
 
 # require swap commands and get size
 test "$is_swap" = "y" && while true; do
@@ -366,7 +358,7 @@ while mkuser; do
 done
 
 # get root password
-root_password="$(chopt "What do you want to set as the root password?" "1234")"
+root_password="$(chopt "What do you want to set as the root password?" "${user_1_password:-1234}")"
 
 
 # Step 4: establish connectivity & download tools/tarball
@@ -375,30 +367,28 @@ root_password="$(chopt "What do you want to set as the root password?" "1234")"
 # try pinging voidlinux.org
 printf "Testing network...\n"
 while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
-    case "$(chmenu -n "How would you like to set up an internet connection?" "Add a wireless network to wpa_supplicant" "Retry network config (restart runit services)" "Test connection" "Proceed without testing connection")" in
-        n1) netname="$(chopt 'What is the network name/SSID?')"
-            netpw="$(chopt 'What is the password? [ENTER=none]')"
-            test -n "$netname" -a -z "$netpw" && printf "network={\n\tssid=\"$netname\"\n}\n" >>/etc/wpa_supplicant/wpa_supplicant.conf
-            test -n "$netname" -a -n "$netpw" && wpa_passphrase "$netname" "$netpw" >>/etc/wpa_supplicant/wpa_supplicant.conf
-            ;;
-        n2) sv restart wpa_supplicant dhcpcd; continue ;;
-        n3) continue ;;
-        n4) break ;;
-    esac
+    setup_net="$(nummode="y" chmenu "How would you like to set up an internet connection?" "Add a wireless network to wpa_supplicant" "Retry network config (restart runit services)" "Test connection" "Proceed without testing connection")"
+    test "$setup_net" = "1" && netname="$(chopt 'What is the network name/SSID?')" && netpw="$(chopt 'What is the password? [ENTER=none]')" && (
+    test -n "$netname" -a -z "$netpw" && printf "network={\n\tssid=\"$netname\"\n}\n" >>/etc/wpa_supplicant/wpa_supplicant.conf && return
+    test -n "$netname" -a -n "$netpw" && wpa_passphrase "$netname" "$netpw" >>/etc/wpa_supplicant/wpa_supplicant.conf && return) && continue
+    test "$setup_net" = "2" && (sv restart wpa_supplicant dhcpcd;:) && continue
+    test "$setup_net" = "3" && continue
+    test "$setup_net" = "4" && break
 done
 
 # install required utils
 command -v wget >/dev/null 2>&1 || (printf "Installing 'wget'...\n"; pkgm wget)
 req_cmds wget
+# TODO: resolve dependencies for everything else needed, install packages, etc over here
 
 # Step 6: partition the disk
 # ------------------------------------------------------------------------------
 
 # if partitioning is being done manually
 test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
-    test "$(chmenu -n "Disk $disk selected for manual partitioning. What would you like to do?" "continue (if $disk has been prepared, and its volumes mounted at $vdir)" "spawn a new shell and prepare $disk as needed")" = "n1" && break
+    test "$(nummode="y" chmenu "Disk $disk selected for manual partitioning. What would you like to do?" "continue (if $disk has been prepared, and its volumes mounted at $vdir)" "spawn a new shell and prepare $disk as needed")" = "1" && break
     printf "\nYou have entered a subshell spawned by ${0##*/}.\nSet up $disk's partitions and their filesystems and exit with \`exit\` or ^D.\n" >&2
-    eval "$SHELL"
+    eval "${SHELL:-/bin/sh}"
 done
 
 # if partitioning is done automatically
@@ -407,8 +397,8 @@ test "$partmethod" != "manual" && {
     req_cmds umount swapoff fdisk "mkfs.$filesystem"
 
     # warn if not disabled
-    test "$warn" != "n" -a "$(chmenu -n "Disk $disk selected for automatic partitioning, which will overwrite the\ncurrent data and partition table. Do you want to continue?" "yes" "no")" = "n2" && printf "exited\n" >&2 && exit 0
-    test "$warn" != "n" -a "$(chmenu -n "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" = "n2" && printf "exited\n" >&2 && exit 0
+    test "$warn" != "n" -a "$(nummode="y" chmenu "Disk $disk selected for automatic partitioning, which will overwrite the\ncurrent data and partition table. Do you want to continue?" "yes" "no")" = "2" && printf "exited\n" >&2 && exit 0
+    test "$warn" != "n" -a "$(nummode="y" chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" = "2" && printf "exited\n" >&2 && exit 0
 
     # set up the disk
     while ! prep_disk "$disk"; do printf "accessing $disk failed. retrying in 3s...\n" >&2; done
@@ -424,12 +414,12 @@ test "$partmethod" != "manual" && {
     run cryptsetup -q -v luksOpen "${partprefix}${mainpart}" voidlvm &&
     run vgcreate -v void /dev/mapper/voidlvm &&
     run lvcreate -v --name rootfs -l 100%FREE void &&
-    run mkfs.$filesystem $fsopts /dev/void/rootfs &&
+    run mkfs.$filesystem $mkfs_opts /dev/void/rootfs &&
     run mount -v /dev/void/rootfs "$vdir"
 
     # create a standard root filesystem
     test "$is_crypt" != "y" &&
-    run mkfs.$filesystem $fsopts "${partprefix}${mainpart}" &&
+    run mkfs.$filesystem $mkfs_opts "${partprefix}${mainpart}" &&
     run mount -v "${partprefix}${mainpart}" "$vdir"
 
     # mount other filesystems
@@ -451,3 +441,13 @@ run mount -v --make-rslave "$vdir/run"
 
 # cd to the new root
 cd "$vdir"
+
+
+# Step 20: clean up and exit
+# ------------------------------------------------------------------------------
+
+# cd to the script dir
+cd "$scriptdir"
+
+# disable swaps/mounts for $disk
+prep_disk "$disk"
