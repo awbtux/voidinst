@@ -232,6 +232,9 @@ prep_disk() {
     # disable swaps/mounts
     test -n "$main_swaps" && for mnt in $main_swaps; do nobreak="y" run swapoff -v "$mnt" || return 1; done
     test -n "$main_mounts" && for mnt in $main_mounts; do nobreak="y" run umount -vR "$mnt" || return 1; done
+
+    # cryptsetup volumes
+    #for cmnt in $(dmsetup ls --tree -o ascii 2>/dev/null | awk '{print $1}' | sed 's/^ *`*-*//g'); do
     return 0
 }
 
@@ -360,6 +363,19 @@ done
 # get root password
 root_password="$(chopt "What do you want to set as the root password?" "${user_1_password:-1234}")"
 
+# ask the user whether to proceed
+test "$partmethod" != "manual" -a "$warn" != "n" && (
+test "$(chmenu "Disk $disk selected for automatic partitioning, which will overwrite the\ncurrent data and partition table. Do you want to continue?" "yes" "no")" != "yes" && return 0
+test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "exited\n" >&2 && exit 0
+
+# if partitioning is being done manually
+test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
+    manualmethod="$(nummode="y" chmenu "Disk $disk selected for manual partitioning. What would you like to do?" "continue (if $disk's volumes are mounted at $vdir)" "set rootfs mount location [$vdir]" "spawn a new shell and prepare $disk as needed")"
+    test "$manualmethod" = "1" && break
+    test "$manualmethod" = "2" && while ! vdir="$(chopt "Where is $disk's root filesystem mounted?" "$vdir")" && test -d "$vdir"; do printf "$vdir: No such file or directory\n"; done
+    test "$manualmethod" = "3" && (printf "\nYou have entered a subshell spawned by ${0##*/}.\nSet up $disk's partitions and their filesystems and exit with \`exit\` or ^D.\n" >&2; eval "${SHELL:-/bin/sh}")
+done
+
 
 # Step 4: establish connectivity & download tools/tarball
 # ------------------------------------------------------------------------------
@@ -370,7 +386,7 @@ while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
     setup_net="$(nummode="y" chmenu "How would you like to set up an internet connection?" "Add a wireless network to wpa_supplicant" "Retry network config (restart runit services)" "Test connection" "Proceed without testing connection")"
     test "$setup_net" = "1" && netname="$(chopt 'What is the network name/SSID?')" && netpw="$(chopt 'What is the password? [ENTER=none]')" && (
     test -n "$netname" -a -z "$netpw" && printf "network={\n\tssid=\"$netname\"\n}\n" >>/etc/wpa_supplicant/wpa_supplicant.conf && return
-    test -n "$netname" -a -n "$netpw" && wpa_passphrase "$netname" "$netpw" >>/etc/wpa_supplicant/wpa_supplicant.conf && return) && continue
+    test -n "$netname" -a -n "$netpw" && wpa_passphrase "$netname" "$netpw" >>/etc/wpa_supplicant/wpa_supplicant.conf) && continue
     test "$setup_net" = "2" && (sv restart wpa_supplicant dhcpcd;:) && continue
     test "$setup_net" = "3" && continue
     test "$setup_net" = "4" && break
@@ -379,29 +395,15 @@ done
 # install required utils
 command -v wget >/dev/null 2>&1 || (printf "Installing 'wget'...\n"; pkgm wget)
 req_cmds wget
-# TODO: resolve dependencies for everything else needed, install packages, etc over here
+
 
 # Step 6: partition the disk
 # ------------------------------------------------------------------------------
 
-# if partitioning is being done manually
-test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
-    test "$(nummode="y" chmenu "Disk $disk selected for manual partitioning. What would you like to do?" "continue (if $disk has been prepared, and its volumes mounted at $vdir)" "spawn a new shell and prepare $disk as needed")" = "1" && break
-    printf "\nYou have entered a subshell spawned by ${0##*/}.\nSet up $disk's partitions and their filesystems and exit with \`exit\` or ^D.\n" >&2
-    eval "${SHELL:-/bin/sh}"
-done
-
 # if partitioning is done automatically
 test "$partmethod" != "manual" && {
-    # we need these
-    req_cmds umount swapoff fdisk "mkfs.$filesystem"
-
-    # warn if not disabled
-    test "$warn" != "n" -a "$(nummode="y" chmenu "Disk $disk selected for automatic partitioning, which will overwrite the\ncurrent data and partition table. Do you want to continue?" "yes" "no")" = "2" && printf "exited\n" >&2 && exit 0
-    test "$warn" != "n" -a "$(nummode="y" chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" = "2" && printf "exited\n" >&2 && exit 0
-
     # set up the disk
-    while ! prep_disk "$disk"; do printf "accessing $disk failed. retrying in 3s...\n" >&2; done
+    while ! prep_disk "$disk"; do printf "accessing $disk failed. retrying in 3s...\n" >&2; sleep 3; done
     provision_disk "$disk"
 
     # create some filesystems
@@ -449,5 +451,18 @@ cd "$vdir"
 # cd to the script dir
 cd "$scriptdir"
 
+# unmount pseudo-filesystems
+run umount -Rv "$vdir/dev"
+run umount -Rv "$vdir/sys"
+run umount -Rv "$vdir/proc"
+run umount -Rv "$vdir/run"
+
 # disable swaps/mounts for $disk
 prep_disk "$disk"
+
+# cryptsetup volumes
+test "$is_crypt" = "y" &&
+run umount -Rv "$vdir" &&
+run lvchange -van /dev/void/rootfs &&
+run cryptsetup -qv luksClose /dev/mapper/voidlvm
+return 0
