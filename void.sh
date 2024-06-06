@@ -69,6 +69,12 @@ add_pkg "linux-firmware-network"
 # dev packages, uncomment if you want them
 add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
 
+# java runtimes, uncomment if you want them (you probably don't)
+#add_pkg "openjdk8-jre openjdk11-jre openjdk17-jre openjdk21-jre"
+
+# minecraft launcher, uncomment if you want it (java is required)
+#add_pkg "PrismLauncher"
+
 # dbus, uncomment if you want it; needed for bluetooth, pipewire/pulseaudio, and many graphical programs
 #add_pkg "dbus"; add_sv "dbus"
 
