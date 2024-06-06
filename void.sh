@@ -5,7 +5,7 @@
 # todo: macchanger
 
 
-# Step 0: config
+# Step 0: user config
 # ------------------------------------------------------------------------------
 
 # used below
@@ -217,66 +217,36 @@ pkgm() {
     done && test "$pkgm" != "${pkgm##${pkgm%%;*};}" && eval "${pkgm%%;*};:" && pkgm="${pkgm##${pkgm%%;*};}"; eval "$pkgm \"\$@\""
 }
 
-# unmount/unswap a disk and things mounted under it
-prep_disk() {
-    # find mountpoints/swaps to clean for each partition
-    for mnt in ${1}*; do
-        for smnt in $(grep "$mnt\s" </proc/mounts | awk '{print $2}'); do main_mounts="$smnt${main_mounts:+ $main_mounts}"; done
-        test -n "$(grep "$mnt\s" </proc/swaps | awk '{print $1; exit}')" && main_swaps="$mnt${main_swaps:+ $main_swaps}"
-    done
-
-    # handle peripheral swaps/mounts
-    for mnt in $main_mounts; do
-        for smnt in $(grep "$mnt/.*" </proc/mounts | awk '{print $2}'); do main_mounts="$smnt${main_mounts:+ $main_mounts}"; done
-        for smnt in $(grep "$mnt/.*" </proc/swaps | awk '{print $1}'); do main_swaps="$smnt${main_swaps:+ $main_swaps}"; done
-    done
-
-    # sort by length, remove duplicate entries (this search method inevitably adds them)
-    main_mounts="$(for mnt in $main_mounts; do printf "$mnt\n" | awk '{print length, $0}'; done | sort -run | awk '{print $2}')"
-    main_swaps="$(for mnt in $main_swaps; do printf "$mnt\n" | awk '{print length, $0}'; done | sort -run | awk '{print $2}')"
-
-    # disable swaps/mounts
-    test -n "$main_swaps" && for mnt in $main_swaps; do nobreak="y" run swapoff -v "$mnt" || return 1; done
-    test -n "$main_mounts" && for mnt in $main_mounts; do nobreak="y" run umount -vR "$mnt" || return 1; done
-
-    # cryptsetup volumes
-    #for cmnt in $(dmsetup ls --tree -o ascii 2>/dev/null | awk '{print $1}' | sed 's/^ *`*-*//g'); do
-    return 0
-}
-
 # partition the disk
 provision_disk() {
-    # decide between efi and bios based on the availability of efivarfs
     test ! -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+1M\nt\n4\nx\n\nvoidbios\nA\nr\n" && biospart="1" && efipart="" && mainpart="2"
     test -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+128M\nt\n1\nx\nn\nvoidefi\nr\n" && biospart="" && efipart="1" && mainpart="2"
-
-    # if using both efi and bios
     test "$both_efi_bios" = "y" && fdiskcmd="g\nn\n1\n\n+1M\nn\n2\n\n+128M\nt\n1\n4\nt\n2\n1\nx\nn\n1\nbios_boot\nn\n2\nefi_boot\nA\n1\nr\n" && biospart="1" && efipart="2" && mainpart="3"
-
-    # swap partition
     test "$is_swap" = "y" && swappart="2" && mainpart="3"
     test "$is_swap" = "y" -a "$efipart" = "2" && swappart="3" && mainpart="4"
     test "$is_swap" = "y" && fdiskcmd="${fdiskcmd}n\n${swappart}\n\n+${swap_mb}M\nt\n${swappart}\n19\nx\nn\n${swappart}\nvoidswap\nr\n"
-
-    # main partition (lvm container, or normal rootfs)
-    fdiskcmd="${fdiskcmd}n\n${mainpart}\n\n\nt\n${mainpart}\n20\nx\nn\n${mainpart}\nvoidrootfs\nr\nw\n"
-    test "$is_crypt" = "y" && fdiskcmd="${fdiskcmd}n\n${mainpart}\n\n\nt\n${mainpart}\n44\nx\nn\n${mainpart}\nvoidlvm\nr\nw\n"
-
-    # run fdisk
-    printf "$fdiskcmd" | run fdisk -w always -W always "$disk"
-
-    # prefix for partitions
-    while test ! -r "${partprefix:=$(printf "$disk"*1)}"; do
-        printf "."
-        partprefix="$(printf "$disk"*1)"
-    done
-    partprefix="${partprefix%1}"
+    test "$is_crypt" = "y" && parttype="44" && partname="voidlvm" || ! parttype="20" || partname="voidrootfs"
+    printf "${fdiskcmd}n\n${mainpart}\n\n\nt\n${mainpart}\n${parttype}\nx\nn\n${mainpart}\n${partname}\nr\nw\n" | run fdisk -w always -W always "$disk"
+    while test ! -r "${partprefix:=$(printf "$disk"*1)}"; do partprefix="$(printf "$disk"*1)"; done; partprefix="${partprefix%1}"
 }
 
 # write an fstab
 write_fstab() {
-    printf "${efipart:+UUID=$(blk_uuid "${partprefix}${efipart}") /boot/efi vfat defaults,relatime,lazytime,quiet,discard 0 0\n}"
-    printf "${swappart:+UUID=$(blk_uuid "${partprefix}${swappart}") swap swap defaults,relatime,lazytime,quiet,discard 0 0\n}"
+    printf "%s\n" "${efipart:+UUID=$(blk_uuid "${partprefix}${efipart}") /boot/efi vfat defaults,relatime,lazytime,quiet,discard 0 0}"
+    printf "%s\n" "${swappart:+UUID=$(blk_uuid "${partprefix}${swappart}") swap swap defaults,relatime,lazytime,quiet,discard 0 0}"
+}
+
+# unmount/unswap a disk and things mounted under it
+prep_disk() {
+    for mnt in ${1}*; do for smnt in $(grep "$mnt\s" </proc/mounts | awk '{print $2}'); do main_mounts="$smnt${main_mounts:+ $main_mounts}"; done; done
+    for mnt in ${1}*; do test -n "$(grep "$mnt\s" </proc/swaps | awk '{print $1; exit}')" && main_swaps="$mnt${main_swaps:+ $main_swaps}"; done
+    for mnt in $main_mounts; do for smnt in $(grep "$mnt/.*" </proc/mounts | awk '{print $2}'); do main_mounts="$smnt${main_mounts:+ $main_mounts}"; done; done
+    for mnt in $main_mounts; do for smnt in $(grep "$mnt/.*" </proc/swaps | awk '{print $1}'); do main_swaps="$smnt${main_swaps:+ $main_swaps}"; done; done
+    main_mounts="$(for mnt in $main_mounts; do printf "$mnt\n" | awk '{print length, $0}'; done | sort -run | awk '{print $2}')"
+    main_swaps="$(for mnt in $main_swaps; do printf "$mnt\n" | awk '{print length, $0}'; done | sort -run | awk '{print $2}')"
+    test -n "$main_swaps" && for mnt in $main_swaps; do nobreak="y" run swapoff -v "$mnt" || return 1; done
+    test -n "$main_mounts" && for mnt in $main_mounts; do nobreak="y" run umount -vR "$mnt" || return 1; done
+    return 0
 }
 
 
@@ -319,7 +289,7 @@ for sig in HUP QUIT INT TERM ABRT KILL STOP SYS; do
 done
 
 
-# Step 3: install options
+# Step 3: user-interactive script configuration
 # ------------------------------------------------------------------------------
 
 # menu title
@@ -382,10 +352,6 @@ test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
     test "$manualmethod" = "3" && (printf "\nYou have entered a subshell spawned by ${0##*/}.\nSet up $disk's partitions and their filesystems and exit with \`exit\` or ^D.\n" >&2; eval "${SHELL:-/bin/sh}")
 done
 
-
-# Step 4: establish connectivity & download tools/tarball
-# ------------------------------------------------------------------------------
-
 # try pinging voidlinux.org
 printf "Testing network...\n"
 while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
@@ -403,7 +369,7 @@ command -v wget >/dev/null 2>&1 || (printf "Installing 'wget'...\n"; pkgm wget)
 req_cmds wget
 
 
-# Step 6: partition the disk
+# Step 5: partition the disk
 # ------------------------------------------------------------------------------
 
 # if partitioning is done automatically
