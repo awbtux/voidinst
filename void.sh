@@ -365,10 +365,14 @@ while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
 done
 
 # install required utils
-command -v wget >/dev/null 2>&1 || (printf "Installing 'wget'...\n"; pkgm wget)
+(req_cmds wget) || pkgm wget
+(req_cmds mount umount mkswap swapon swapoff) || pkgm util-linux
+test "$is_crypt" = "y" && ! (req_cmds cryptsetup) && pkgm cryptsetup
+test "$is_crypt" = "y" && ! (req_cmds lvcreate lvchange vgcreate) && pkgm lvm2
+test "$efipart" != "" && ! (req_cmds mkfs.fat) && pkgm dosfstools
 
 
-# Step 5: partition the disk
+# Step 4: partition the disk
 # ------------------------------------------------------------------------------
 
 # if partitioning is done automatically
@@ -378,7 +382,7 @@ test "$partmethod" != "manual" && {
     provision_disk "$disk"
 
     # create some filesystems
-    test -n "$efipart" && run mkfs.vfat -v -F32 -n "VOIDEFI" "${partprefix}${efipart}"
+    test -n "$efipart" && run mkfs.fat -v -F32 -n "VOIDEFI" "${partprefix}${efipart}"
     test -n "$swappart" && run mkswap -L "voidswap" "${partprefix}${swappart}"
 
     # format the remaining space for full-disk encryption
@@ -412,15 +416,24 @@ run mount -v --make-rslave "$vdir/sys"
 run mount -v --make-rslave "$vdir/proc"
 run mount -v --make-rslave "$vdir/run"
 
-# cd to the new root
-cd "$vdir"
+
+# Step 5: configure/install the system
+# ------------------------------------------------------------------------------
+
+# download tarball
+run cd "$scriptdir/cache"
+test ! -r "$tarball" && run wget -v "https://${mirror:=repo-default.voidlinux.org}/live/current/$tarball"
+
+# extract at the new root
+run cd "$vdir"
+run tar -xpf "$scriptdir/cache/$tarball"
 
 
 # Step 20: clean up and exit
 # ------------------------------------------------------------------------------
 
 # cd to the script dir
-cd "$scriptdir"
+run cd "$scriptdir"
 
 # unmount pseudo-filesystems
 run umount -Rv "$vdir/dev"
