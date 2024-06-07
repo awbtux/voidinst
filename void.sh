@@ -367,6 +367,7 @@ done
 # install required utils
 (req_cmds wget) || pkgm wget
 (req_cmds mount umount mkswap swapon swapoff) || pkgm util-linux
+(req_cmds tar) || pkgm tar
 test "$is_crypt" = "y" && ! (req_cmds cryptsetup) && pkgm cryptsetup
 test "$is_crypt" = "y" && ! (req_cmds lvcreate lvchange vgcreate) && pkgm lvm2
 test "$efipart" != "" && ! (req_cmds mkfs.fat) && pkgm dosfstools
@@ -449,4 +450,6 @@ test "$is_crypt" = "y" &&
 run umount -Rv "$vdir" &&
 run lvchange -van /dev/void/rootfs &&
 run cryptsetup -qv luksClose /dev/mapper/voidlvm
-return 0
+
+# if everything succeeds, we probably don't need the tarball anymore
+run rm -rf "$scriptdir/cache"
