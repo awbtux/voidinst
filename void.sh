@@ -366,7 +366,6 @@ done
 
 # install required utils
 command -v wget >/dev/null 2>&1 || (printf "Installing 'wget'...\n"; pkgm wget)
-req_cmds wget
 
 
 # Step 5: partition the disk
