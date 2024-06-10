@@ -480,7 +480,6 @@ run cp -rfv "$scriptdir/etc" "$vdir"
 for srv in $SERVICES; do
     run chroot "$vdir" ln -sfv "/etc/sv/$srv" "/etc/runit/runsvdir/default/$srv"
 done
-read test
 
 # create users
 for i in $(seq 1 ${userct:-0}); do
