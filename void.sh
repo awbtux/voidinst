@@ -49,7 +49,7 @@ mirror="repo-fastly.voidlinux.org"
 warn=""
 
 # generally useful system packages
-add_pkg "acpid cryptsetup dracut efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"
+add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"; add_sv "wpa_supplicant dhcpcd"
 
 # we don't need these
 del_pkg "base-container-full sudo"
@@ -79,7 +79,7 @@ add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-c
 #add_pkg "dbus"; add_sv "dbus"
 
 # bluetooth, uncomment if you want it
-add_pkg "bluez bluetuith"; add_sv "bluetoothd"; add_ugrp "bluetooth"
+#add_pkg "bluez bluetuith"; add_sv "bluetoothd"; add_ugrp "bluetooth"
 
 # alsa audio, uncomment if you want it
 # TODO: copy /usr/lib/ladspa/caps.so to /usr/lib/
@@ -109,7 +109,7 @@ add_pkg "cups"; add_sv "cupsd"; add_ugrp "lpadmin"
 add_pkg "cups-filters gutenprint brother-brlaser"
 
 # network printer autoconfiguration, among other things
-add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
+#add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
 
 # wayland display server, uncomment if you want it
 add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
@@ -141,7 +141,7 @@ add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 #add_pkg "tlp"; add_sv "tlp"
 
 # things I use, uncomment if you want them (you should)
-add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg htop lf libsixel-util ncdu neofetch neovim odt2txt pfetch pv qsv ripgrep sc-im socat tmux unzip wget wget wimlib zip zsh zstd"
+add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg htop lf libsixel-util ncdu neofetch neovim odt2txt pfetch pv qsv ripgrep sc-im socat tmux unzip wget wget wimlib yash zip zsh zstd"
 
 # same as above, separated due to multimedia/display library dependencies
 add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
@@ -150,13 +150,13 @@ add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
 #add_pkg "abook notmuch neomutt"
 
 # torrent client, uncomment if you want it
-add_pkg "transmission"
+#add_pkg "transmission"
 
 # file syncing, uncomment if you want it
 #add_pkg "syncthing stc"
 
 # network time protocol, uncomment if you want it
-#add_pkg "ntpd"; add_sv "ntpd"
+#add_pkg "openntpd"; add_sv "ntpd"
 
 
 # Step 1: other function declarations
@@ -178,7 +178,7 @@ blk_uuid()  { for blk in /dev/disk/by-uuid/*; do case "$(readlink -f "$blk")" in
 
 # command handlers
 req_cmds() { for rcmd in "$@"; do command -v "$rcmd" >/dev/null 2>&1 || error "$rcmd: command not found" 127; done; return 0; }
-run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*"; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; }
+run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*" >&2; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; }
 
 # implement missing commands
 command -v seq >/dev/null 2>&1 || seq() { from="$1"; while test "$from" -le "$2"; do printf "$from "; from="$((from+1))"; done; }
@@ -204,6 +204,7 @@ mkuser() {
     eval 'user_'"$userct"'_comment="$(chopt "What should $user_'"$userct"'_name'"'"'s full name be?" "Default User")"'
     eval 'user_'"$userct"'_password="$(chopt "What should the password for $user_'"$userct"'_name be?" "1234")"'
     eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "$GROUPS")"'
+    eval 'user_'"$userct"'_shell="$(chopt "What shell should $user_'"$userct"'_name use?" "/bin/bash")"'
     return 0
 }
 
@@ -280,8 +281,8 @@ test "${EUID:-${UID:-$(id -u 2>/dev/null)}}" != "0" && (error "Operation not per
 }
 
 # create dirs
-test ! -d "$vdir" && run mkdir -p "$vdir" >/dev/null
-test ! -d "$scriptdir/cache" && run mkdir -p "$scriptdir/cache" >/dev/null
+test ! -d "$vdir" && ! mkdir -p "$vdir" && exit 1
+test ! -d "$scriptdir/cache" && ! mkdir -p "$scriptdir/cache" && exit 1
 
 # trap these signals
 for sig in HUP QUIT INT TERM ABRT KILL STOP SYS; do
@@ -338,6 +339,9 @@ done
 
 # get root password
 root_password="$(chopt "What do you want to set as the root password?" "${user_1_password:-1234}")"
+
+# get root shell
+root_shell="$(chopt "What do you want to set as the root shell?" "${user_1_shell:-/bin/bash}")"
 
 # ask the user whether to proceed
 test "$partmethod" != "manual" -a "$warn" != "n" && (
@@ -428,6 +432,73 @@ test ! -r "$tarball" && run wget -v "https://${mirror:=repo-default.voidlinux.or
 # extract at the new root
 run cd "$vdir"
 run tar -xpf "$scriptdir/cache/$tarball"
+
+# xbps env vars
+export XBPS_REPO="https://${mirror:=repo-default.voidlinux.org}/current""$(test -z "${arch%%*musl*}" && printf "/musl")"
+export XBPS_ARCH="$arch"
+
+# copy xbps keys
+run mkdir -pv $VDIR/var/db/xbps/keys
+run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
+
+# use network in the chroot
+run cp -v /etc/resolv.conf "$vdir/etc/"
+
+# install packages
+run chroot "$vdir" xbps-install -Sy $PACKAGES
+
+# install nonfree packages
+run chroot "$vdir" xbps-install -Sy $NONFREE_PACKAGES
+
+# remove packages
+run chroot "$vdir" xbps-remove -y $DEL_PACKAGES
+
+# configure libc locales
+run sed "s/#$language/$language/g" -i "$vdir/etc/default/libc-locales"
+run printf "LANG=$language.UTF-8\nLC_ALL=$language.UTF-8\nLC_COLLATE=C" >"$vdir/etc/locale.conf"
+
+# set hostname
+run printf "%s\n" "$hostname" >"$vdir/etc/hostname"
+
+# link doas to sudo
+run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
+
+# copy wpa supplicant config
+test -f "/etc/wpa_supplicant/wpa_supplicant.conf" && run cp -v /etc/wpa_supplicant/wpa_supplicant.conf "$vdir/etc/wpa_supplicant/wpa_supplicant.conf"
+
+# root shell
+run chroot "$vdir" usermod -s "$root_shell" root
+
+# root password
+printf "$root_password\n$root_password\n" | run chroot "$vdir" passwd root
+
+# copy user's /etc
+test -d "$scriptdir/etc/skel" && run rm -rf "$vdir/etc/skel"
+run cp -rfv "$scriptdir/etc" "$vdir"
+
+# enable services
+for srv in $SERVICES; do
+    run chroot "$vdir" ln -sfv "/etc/sv/$srv" "/etc/runit/runsvdir/default/$srv"
+done
+read test
+
+# create users
+for i in $(seq 1 ${userct:-0}); do
+    eval 'run chroot "$vdir" useradd -mG "$user_'"$i"'_groups" -s "$user_'"$i"'_shell" -c "$user_'"$i"'_comment" "$user_'"$i"'_name"'
+    eval 'printf "$user_'"$i"'_password\n$user_'"$i"'_password\n" | run chroot "$vdir" passwd $user_'"$i"'_name'
+done
+
+# install grub
+test -d "/sys/firmware/efi/efivars" && {
+    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
+    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
+} || {
+    eval 'run chroot "$vdir" grub-install "$disk"'
+}
+run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
+
+# reconfigure packages
+run chroot "$vdir" xbps-reconfigure -fa
 
 
 # Step 20: clean up and exit
