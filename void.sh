@@ -535,7 +535,7 @@ run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
 test -f "/etc/wpa_supplicant/wpa_supplicant.conf" && run cp -v /etc/wpa_supplicant/wpa_supplicant.conf "$vdir/etc/wpa_supplicant/wpa_supplicant.conf"
 
 # root shell
-run chroot "$vdir" usermod -sb "$root_shell" root
+run chroot "$vdir" usermod -s "$root_shell" root
 
 # root password
 printf "%s\n%s\n" "$root_password" "$root_password" | run chroot "$vdir" passwd root
@@ -581,7 +581,7 @@ run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 run chroot "$vdir" xbps-reconfigure -vfa
 
 
-# Step 20: clean up and exit
+# Step 6: clean up and exit
 # ------------------------------------------------------------------------------
 
 # cd to the script dir
