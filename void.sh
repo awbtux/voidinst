@@ -125,13 +125,13 @@ add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; t
 #add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
 
 # wayland display server, uncomment if you want it
-add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
+add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
 
 # x11 display server, uncomment if you want it
 #add_pkg "xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server"
 
 # wayland & x11 display servers, uncomment if you want them
-#add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server xorg-server-xwayland"; add_ugrp "_seatd"; add_sv "seatd"
+#add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard wlr-randr xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server xorg-server-xwayland"; add_ugrp "_seatd"; add_sv "seatd"
 
 # my wayland graphical environment, uncomment if you want it
 add_pkg "river alacritty yambar grim"
@@ -265,9 +265,9 @@ provision_fdisk() {
 write_fstab() {
     printf "%s\t%s\t%s\t%s\t%s\t%s\n" "tmpfs" "/tmp" "tmpfs" "defaults,nosuid,nodev" "0" "0"
     test -n "$efipart" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${efipart}")" "/boot/efi" "vfat" "defaults,relatime,lazytime,quiet,discard" "0" "0"
-    test -n "$swappart" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${swappart}")" "swap" "swap" "defaults,relatime,lazytime,quiet,discard" "0" "0"
-    test "$is_crypt" = "y" && printf "%s\t%s\t%s\t%s\t%s\t%s\n" "/dev/$luks_vgroup_name/$lvm_main_vol_name" "/" "$filesystem" "defaults,relatime,lazytime,quiet,discard" "0" "0"
-    test "$is_crypt" != "y" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${mainpart}")" "/" "$filesystem" "defaults,relatime,lazytime,quiet,discard" "0" "0"
+    test -n "$swappart" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${swappart}")" "swap" "swap" "defaults" "0" "0"
+    test "$is_crypt" = "y" && printf "%s\t%s\t%s\t%s\t%s\t%s\n" "/dev/$luks_vgroup_name/$lvm_main_vol_name" "/" "$filesystem" "defaults,relatime,lazytime,discard" "0" "0"
+    test "$is_crypt" != "y" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${mainpart}")" "/" "$filesystem" "defaults,relatime,lazytime,discard" "0" "0"
     return 0
 }
 
@@ -573,11 +573,11 @@ test "$partmethod" != "manual" && run write_fstab >"$vdir/etc/fstab"
 test "$is_crypt" = "y" &&
 run chroot "$vdir" chmod -v 000 "/boot/volume.key" &&
 run chroot "$vdir" chmod -vR g-rwx,o-rwx "/boot" &&
-run printf "%s\tUUID=%s\t/boot/volume.key\tluks,discard\n" "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/crypttab" &&
+run printf "%s\tUUID=%s\t/boot/volume.key\tluks,discard\n" "$luks_vgroup_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/crypttab" &&
 run printf 'install_items+=" /boot/volume.key /etc/crypttab "\n' >>"$vdir/etc/dracut.conf.d/10-crypt.conf" &&
 (test "$(. "$vdir/etc/default/grub"; printf "$GRUB_ENABLE_CRYPTODISK")" != "y" && run printf 'GRUB_ENABLE_CRYPTODISK="y"\n' >>"$vdir/etc/default/grub";:) &&
-run printf 'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
-run printf 'GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
+run printf 'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_vgroup_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
+run printf 'GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_vgroup_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
 
 # install grub
 test -d "/sys/firmware/efi/efivars" && {
