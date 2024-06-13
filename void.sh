@@ -27,15 +27,6 @@ test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(
 # name of the boot device entry on EFI; leave blank or set it to "Void Linux" and the script will manage it automatically
 efi_entry_name="Void Linux"
 
-# root filesystem type: can be ext4, ext3, ext2, f2fs, btrfs, xfs
-filesystem="f2fs"
-
-# mkfs.$filesystem options for root
-mkfs_opts='-l "voidrootfs"'
-
-# printf "$hostname\n" >"$vdir/etc/hostname"
-hostname="Connors-Macbook-Air"
-
 # names of partitions/filesystems/containers
 bios_partition_name="voidmbr"
 efi_partition_name="voidefi"
@@ -46,11 +37,20 @@ lvm_main_vol_name="rootfs" # name of the logical volume containing the root file
 root_partition_name="voidrootfs" # name for unencrypted main partition
 efi_fat32_label="VOIDEFI"
 
-# language & glibc locale
-language="en_US"
+# root filesystem type: can be ext4, ext3, ext2, f2fs, btrfs, xfs
+filesystem="f2fs"
 
 # root user's shell
 root_shell="/bin/bash"
+
+# mkfs.$filesystem options for root
+mkfs_opts="-l '$root_partition_name'"
+
+# language & glibc locale
+language="en_US"
+
+# printf "$hostname\n" >"$vdir/etc/hostname"
+hostname="Connors-Macbook-Air"
 
 # name of tarball to bootstrap the base system with (under `https://repo-default.voidlinux.org/live/current/`)
 tarball="void-$arch-ROOTFS-20240314.tar.xz"
@@ -161,6 +161,9 @@ add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg hto
 
 # same as above, separated due to multimedia/display library dependencies
 add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
+
+# firefox web browser, uncomment if you want it; this gets its own line because of how bloated it is
+add_pkg "firefox"
 
 # my mail setup, uncomment if you want it
 #add_pkg "abook notmuch neomutt"
