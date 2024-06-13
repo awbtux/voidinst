@@ -22,9 +22,9 @@ arch="x86_64"
 both_efi_bios="n"
 
 # grub target, shouldn't require intervention
-test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(test -d /sys/firmware/efi/efivars -o "$both_efi_bios" = "y" && printf "x86_64-efi" || printf "i386-pc")"
+test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(test -d /sys/firmware/efi/efivars && printf "x86_64-efi" || printf "i386-pc")"
 
-# name of the boot device entry on EFI
+# name of the boot device entry on EFI; leave blank or set it to "Void Linux" and the script will manage it automatically
 efi_entry_name="Void Linux"
 
 # root filesystem type: can be ext4, ext3, ext2, f2fs, btrfs, xfs
@@ -36,14 +36,30 @@ mkfs_opts='-l "voidrootfs"'
 # printf "$hostname\n" >"$vdir/etc/hostname"
 hostname="Connors-Macbook-Air"
 
+# names of partitions/filesystems/containers
+bios_partition_name="voidmbr"
+efi_partition_name="voidefi"
+swap_partition_name="voidswap"
+luks_container_name="voidlvm" # name for the main partition when using encryption
+luks_vgroup_name="void" # name of the volume group created under the luks container
+lvm_main_vol_name="rootfs" # name of the logical volume containing the root filesystem
+root_partition_name="voidrootfs" # name for unencrypted main partition
+efi_fat32_label="VOIDEFI"
+
 # language & glibc locale
 language="en_US"
+
+# root user's shell
+root_shell="/bin/bash"
 
 # name of tarball to bootstrap the base system with (under `https://repo-default.voidlinux.org/live/current/`)
 tarball="void-$arch-ROOTFS-20240314.tar.xz"
 
 # repository mirror
 mirror="repo-fastly.voidlinux.org"
+
+# set to 'y' to keep the downloaded tarball after the install finishes
+keep_cache="y"
 
 # set to 'n' to disable warnings and confirmations
 warn=""
@@ -95,7 +111,7 @@ add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; t
 #add_pkg "sndio aucatctl"; add_sv "sndiod"
 
 # printer support, uncomment if you want it
-add_pkg "cups"; add_sv "cupsd"; add_ugrp "lpadmin"
+#add_pkg "cups"; add_sv "cupsd"; add_ugrp "lpadmin"
 
 # printer drivers, select the ones you want
 # "hplip": hp printers
@@ -106,7 +122,7 @@ add_pkg "cups"; add_sv "cupsd"; add_ugrp "lpadmin"
 # "brother-brlaser": brother laser printers
 # "foomatic-db-nonfree": nonfree OpenPrinting printer database (brother printers, mainly)
 # "epson-inkjet-printer-escpr": epson inkjet printer drivers
-add_pkg "cups-filters gutenprint brother-brlaser"
+#add_pkg "cups-filters gutenprint brother-brlaser"
 
 # network printer autoconfiguration, among other things
 #add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
@@ -173,12 +189,13 @@ is_empty() { for mty in "$1"/*; do test -e "$mty" && return 1; done; return 0; }
 
 # get properties from block devices
 blk_size()  { test -r "/sys/block/${1##*/}/size" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/size"; }
-blk_model() { test -r "/sys/block/${1##*/}/device/model" && while IFS= read -r line; do printf "%s " "$line"; done <"/sys/block/${1##*/}/device/model"; }
+blk_model() { test -r "/sys/block/${1##*/}/device/model" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/device/model"; }
+blk_vendor() { test -r "/sys/block/${1##*/}/device/vendor" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/device/vendor"; }
 blk_uuid()  { for blk in /dev/disk/by-uuid/*; do case "$(readlink -f "$blk")" in /dev/"${1##*/}"|"$1") printf "${blk##*/}"; return 0; esac; done; return 1; }
 
 # command handlers
 req_cmds() { for rcmd in "$@"; do command -v "$rcmd" >/dev/null 2>&1 || error "$rcmd: command not found" 127; done; return 0; }
-run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*" >&2; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; }
+run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*" >&2; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; case "$cmd" in mount|swapon) in_progress="y" ;; esac; }
 
 # implement missing commands
 command -v seq >/dev/null 2>&1 || seq() { from="$1"; while test "$from" -le "$2"; do printf "$from "; from="$((from+1))"; done; }
@@ -196,13 +213,26 @@ chmenu() {
     eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
 }
 
+# only used for 1 thing...
+trim_ws() { command -v sed >/dev/null 2>&1 && (sed -e 's/^\s*//g' -e 's/\s*$//g';:) && return 0; while IFS= read -r line; do printf "%s\n" "$line"; done; }
+
 # user creation
 mkuser() {
     test "$(chmenu "Do you want to add a$(test "$userct" -gt 0 2>/dev/null && printf "nother") user?" "yes" "no")" = "no" && return 1
     test "$(test "$userct" -gt 0 2>/dev/null; printf "$?")" -gt 1 2>/dev/null && userct="0"; userct="$((userct+1))"
     eval 'user_'"$userct"'_name="$(chopt "What should the new user'"'"'s name be?" "user")"'
     eval 'user_'"$userct"'_comment="$(chopt "What should $user_'"$userct"'_name'"'"'s full name be?" "Default User")"'
-    eval 'user_'"$userct"'_password="$(chopt "What should the password for $user_'"$userct"'_name be?" "1234")"'
+    while true; do
+        stty -echo 2>/dev/null
+        eval 'user_'"$userct"'_password="$(chopt "What should the password for $user_'"$userct"'_name be?" "1234")"'
+        printf "\n\033[1mConfirm password:\033[0m "
+        eval 'read user_'"$userct"'_pwconfirm'
+        stty echo 2>/dev/null
+        eval 'test "$user_'"$userct"'_password" != "$user_'"$userct"'_pwconfirm"' && printf "\nerror: Passwords do not match" && continue
+        eval 'test -z "$user_'"$userct"'_password" -o -z "$user_'"$userct"'_pwconfirm"' && printf "\nerror: Password cannot be blank" && continue
+        printf "\n"
+        break
+    done
     eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "$GROUPS")"'
     eval 'user_'"$userct"'_shell="$(chopt "What shell should $user_'"$userct"'_name use?" "/bin/bash")"'
     return 0
@@ -219,22 +249,26 @@ pkgm() {
 }
 
 # partition the disk
-provision_disk() {
-    test ! -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+1M\nt\n4\nx\n\nvoidbios\nA\nr\n" && biospart="1" && efipart="" && mainpart="2"
-    test -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+128M\nt\n1\nx\nn\nvoidefi\nr\n" && biospart="" && efipart="1" && mainpart="2"
-    test "$both_efi_bios" = "y" && fdiskcmd="g\nn\n1\n\n+1M\nn\n2\n\n+128M\nt\n1\n4\nt\n2\n1\nx\nn\n1\nbios_boot\nn\n2\nefi_boot\nA\n1\nr\n" && biospart="1" && efipart="2" && mainpart="3"
+provision_fdisk() {
+    test ! -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+1M\nt\n4\nx\n\n$bios_partition_name\nA\nr\n" && biospart="1" && efipart="" && mainpart="2"
+    test -d "/sys/firmware/efi/efivars" && fdiskcmd="g\nn\n1\n\n+128M\nt\n1\nx\nn\n$efi_partition_name\nr\n" && biospart="" && efipart="1" && mainpart="2"
+    test "$both_efi_bios" = "y" && fdiskcmd="g\nn\n1\n\n+1M\nn\n2\n\n+128M\nt\n1\n4\nt\n2\n1\nx\nn\n1\n$bios_partition_name\nn\n2\n$efi_partition_name\nA\n1\nr\n" && biospart="1" && efipart="2" && mainpart="3"
     test "$is_swap" = "y" && swappart="2" && mainpart="3"
     test "$is_swap" = "y" -a "$efipart" = "2" && swappart="3" && mainpart="4"
-    test "$is_swap" = "y" && fdiskcmd="${fdiskcmd}n\n${swappart}\n\n+${swap_mb}M\nt\n${swappart}\n19\nx\nn\n${swappart}\nvoidswap\nr\n"
-    test "$is_crypt" = "y" && parttype="44" && partname="voidlvm" || ! parttype="20" || partname="voidrootfs"
+    test "$is_swap" = "y" && fdiskcmd="${fdiskcmd}n\n${swappart}\n\n+${swap_mb}M\nt\n${swappart}\n19\nx\nn\n${swappart}\n$swap_partition_name\nr\n"
+    test "$is_crypt" = "y" && parttype="44" && partname="$luks_container_name" || ! parttype="20" || partname="$root_partition_name"
     printf "${fdiskcmd}n\n${mainpart}\n\n\nt\n${mainpart}\n${parttype}\nx\nn\n${mainpart}\n${partname}\nr\nw\n" | run fdisk -w always -W always "$disk"
     while test ! -r "${partprefix:=$(printf "$disk"*1)}"; do partprefix="$(printf "$disk"*1)"; done; partprefix="${partprefix%1}"
 }
 
 # write an fstab
 write_fstab() {
-    printf "%s\n" "${efipart:+UUID=$(blk_uuid "${partprefix}${efipart}") /boot/efi vfat defaults,relatime,lazytime,quiet,discard 0 0}"
-    printf "%s\n" "${swappart:+UUID=$(blk_uuid "${partprefix}${swappart}") swap swap defaults,relatime,lazytime,quiet,discard 0 0}"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\n" "tmpfs" "/tmp" "tmpfs" "defaults,nosuid,nodev" "0" "0"
+    test -n "$efipart" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${efipart}")" "/boot/efi" "vfat" "defaults,relatime,lazytime,quiet,discard" "0" "0"
+    test -n "$swappart" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${swappart}")" "swap" "swap" "defaults,relatime,lazytime,quiet,discard" "0" "0"
+    test "$is_crypt" = "y" && printf "%s\t%s\t%s\t%s\t%s\t%s\n" "/dev/$luks_vgroup_name/$lvm_main_vol_name" "/" "$filesystem" "defaults,relatime,lazytime,quiet,discard" "0" "0"
+    test "$is_crypt" != "y" && printf "UUID=%s\t%s\t%s\t%s\t%s\t%s\n" "$(blk_uuid "${partprefix}${mainpart}")" "/" "$filesystem" "defaults,relatime,lazytime,quiet,discard" "0" "0"
+    return 0
 }
 
 # unmount/unswap a disk and things mounted under it
@@ -248,6 +282,16 @@ prep_disk() {
     test -n "$main_swaps" && for mnt in $main_swaps; do nobreak="y" run swapoff -v "$mnt" || return 1; done
     test -n "$main_mounts" && for mnt in $main_mounts; do nobreak="y" run umount -vR "$mnt" || return 1; done
     return 0
+}
+
+# used when the script exits by error/completion/pkill
+exit_signal() {
+    stty echo 2>/dev/null
+    test "$in_progress" = "y" &&
+    printf "\033[1;33mWarning\033[39m:\033[22m %s was not freed cleanly and might still be in use.\n" "$disk" &&
+    printf "Use the '\033[3mumount\033[0m', '\033[3mswapoff\033[0m', '\033[3mlvchange -an\033[0m', and '\033[3mcryptsetup luksClose\033[0m'\n" &&
+    printf "commands on mounted filesystems, enabled swaps, activated LVM volumes, and\n" &&
+    printf "opened LUKS containers, respectively.\n"
 }
 
 
@@ -286,8 +330,11 @@ test ! -d "$scriptdir/cache" && ! mkdir -p "$scriptdir/cache" && exit 1
 
 # trap these signals
 for sig in HUP QUIT INT TERM ABRT KILL STOP SYS; do
-    trap "{ printf \"\n%s: recieved signal $sig\n\" "$0"; exit 2; }" "$sig"
+    trap '{ printf "\n%s: recieved signal '"$sig"'\n" "$0"; exit 2; }' "$sig"
 done
+
+# when the script exits normally, the signal doesn't need to be printed
+trap "exit_signal" EXIT
 
 
 # Step 3: user-interactive script configuration
@@ -316,9 +363,6 @@ done
 eval "disk=\"\$disk$inum\""
 unset inum
 
-# for my personal safety
-test "$disk" = "/dev/nvme0n1" -o "$disk" = "/dev/sda" -o "$disk" = "/dev/sdb" && error "won't overwrite primary disk" 1
-
 # decide how to partition $disk
 partmethod="$(nummode="y" chmenu "Which provisioning scheme would you like to use on $disk?" "Full-disk encryption (automatic)" "No encryption (automatic)" "Swap space, full-disk encryption (automatic)" "Swap space, no encryption (automatic)" "Manual partitioning")"
 test "$partmethod" = "2" && partmethod="auto"
@@ -332,25 +376,41 @@ test "$is_swap" = "y" && while true; do
     swap_mb="$(chopt "How much swap space should be reserved (MiB)?" "1024")"; test "$swap_mb" -gt 0 >&- 2>&- && break
 done
 
+# set efi entry name
+model="$(printf "$(blk_model "$disk")" | trim_ws)"
+vendor="$(printf "$(blk_vendor "$disk")" | trim_ws)"
+test -z "$efi_entry_name" -o "$efi_entry_name" = "Void Linux" && test -n "${vendor:+$vendor }$model" && efi_entry_name="Void Linux (on ${vendor:+$vendor }$model)"
+
 # create as many users as desired
 while mkuser; do
     continue
 done
 
 # get root password
-root_password="$(chopt "What do you want to set as the root password?" "${user_1_password:-1234}")"
-
-# get root shell
-root_shell="$(chopt "What do you want to set as the root shell?" "${user_1_shell:-/bin/bash}")"
+while true; do
+    stty -echo 2>/dev/null
+    printf "\n\033[1mWhat do you want to set as the root password?\033[22m [ENTER=%s] " "$(test -n "$user_1_password" && printf '\033[3;94m$user_1_password\033[0m' || printf "1234")"
+    read root_password && root_pwconfirm=""
+    test -z "$root_password" -a -n "$user_1_password" && root_password="$user_1_password" && root_pwconfirm="$root_password"
+    test -z "$root_password" && root_password="1234"
+    while test -z "$root_pwconfirm"; do
+        printf "\n\033[1mConfirm password:\033[0m "
+        read root_pwconfirm
+    done
+    test "$root_password" != "$root_pwconfirm" && printf "\nerror: Passwords do not match" && continue
+    stty echo 2>/dev/null
+    printf "\n"
+    break
+done
 
 # ask the user whether to proceed
 test "$partmethod" != "manual" -a "$warn" != "n" && (
-test "$(chmenu "Disk $disk selected for automatic partitioning, which will overwrite the\ncurrent data and partition table. Do you want to continue?" "yes" "no")" != "yes" && return 0
+test "$(chmenu "Disk $disk has been selected for automatic partitioning, which will\noverwrite the current data and partition table. Do you want to continue?" "yes" "no")" != "yes" && return 0
 test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "exited\n" >&2 && exit 0
 
 # if partitioning is being done manually
 test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
-    manualmethod="$(nummode="y" chmenu "Disk $disk selected for manual partitioning. What would you like to do?" "continue (if $disk's volumes are mounted at $vdir)" "set rootfs mount location [$vdir]" "spawn a new shell and prepare $disk as needed")"
+    manualmethod="$(nummode="y" chmenu "Disk $disk has been selected for manual partitioning. What would you like to do?" "continue (if $disk's volumes are mounted at $vdir)" "set rootfs mount location [$vdir]" "spawn a new shell and prepare $disk as needed")"
     test "$manualmethod" = "1" && break
     test "$manualmethod" = "2" && while ! vdir="$(chopt "Where is $disk's root filesystem mounted?" "$vdir")" && test -d "$vdir"; do printf "$vdir: No such file or directory\n"; done
     test "$manualmethod" = "3" && (printf "\nYou have entered a subshell spawned by ${0##*/}.\nSet up $disk's partitions and their filesystems and exit with \`exit\` or ^D.\n" >&2; eval "${SHELL:-/bin/sh}")
@@ -384,20 +444,25 @@ test "$efipart" != "" && ! (req_cmds mkfs.fat) && pkgm dosfstools
 test "$partmethod" != "manual" && {
     # set up the disk
     while ! prep_disk "$disk"; do printf "accessing $disk failed. retrying in 3s...\n" >&2; sleep 3; done
-    provision_disk "$disk"
+    provision_fdisk "$disk"
 
     # create some filesystems
     test -n "$efipart" && run mkfs.fat -v -F32 -n "VOIDEFI" "${partprefix}${efipart}"
-    test -n "$swappart" && run mkswap -L "voidswap" "${partprefix}${swappart}"
+    test -n "$swappart" && run mkswap -L "$swap_partition_name" "${partprefix}${swappart}"
 
     # format the remaining space for full-disk encryption
     test "$is_crypt" = "y" &&
     run cryptsetup -q -v luksFormat --type luks1 "${partprefix}${mainpart}" &&
-    run cryptsetup -q -v luksOpen "${partprefix}${mainpart}" voidlvm &&
-    run vgcreate -v void /dev/mapper/voidlvm &&
-    run lvcreate -v --name rootfs -l 100%FREE void &&
-    run mkfs.$filesystem $mkfs_opts /dev/void/rootfs &&
-    run mount -v /dev/void/rootfs "$vdir"
+    run cryptsetup -q -v luksOpen "${partprefix}${mainpart}" "$luks_container_name" && in_progress="y" &&
+    run vgcreate -v "$luks_vgroup_name" /dev/mapper/"$luks_container_name" &&
+    run lvcreate -v --name "$lvm_main_vol_name" -l 100%FREE "$luks_vgroup_name" &&
+    run mkfs.$filesystem $mkfs_opts "/dev/$luks_vgroup_name/$lvm_main_vol_name" &&
+    run mount -v "/dev/$luks_vgroup_name/$lvm_main_vol_name" "$vdir" &&
+    run mkdir -pv "$vdir/boot" &&
+    (run dd if="/dev/urandom" of="$vdir/boot/volume.key" bs=128 count=1 status=progress;:) &&
+    (test ! -r "$vdir/boot/volume.key" && (run head -c128 </dev/urandom >"$vdir/boot/volume.key");:) &&
+    (test ! -r "$vdir/boot/volume.key" && (run od -vAn -N128 -tu1 </dev/urandom >"$vdir/boot/volume.key");:) &&
+    run test -f "$vdir/boot/volume.key" && run cryptsetup -q -v luksAddKey "${partprefix}${mainpart}" "$vdir/boot/volume.key"
 
     # create a standard root filesystem
     test "$is_crypt" != "y" &&
@@ -445,7 +510,7 @@ run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
 run cp -v /etc/resolv.conf "$vdir/etc/"
 
 # install packages
-run chroot "$vdir" xbps-install -Sy $PACKAGES
+run chroot "$vdir" xbps-install -Suy base-container-full $PACKAGES
 
 # install nonfree packages
 run chroot "$vdir" xbps-install -Sy $NONFREE_PACKAGES
@@ -470,7 +535,7 @@ test -f "/etc/wpa_supplicant/wpa_supplicant.conf" && run cp -v /etc/wpa_supplica
 run chroot "$vdir" usermod -s "$root_shell" root
 
 # root password
-printf "$root_password\n$root_password\n" | run chroot "$vdir" passwd root
+printf "%s\n%s\n" "$root_password" "$root_password" | run chroot "$vdir" passwd root
 
 # copy user's /etc
 test -d "$scriptdir/etc/skel" && run rm -rf "$vdir/etc/skel"
@@ -487,12 +552,25 @@ for i in $(seq 1 ${userct:-0}); do
     eval 'printf "$user_'"$i"'_password\n$user_'"$i"'_password\n" | run chroot "$vdir" passwd $user_'"$i"'_name'
 done
 
+# write fstab
+run write_fstab >"$vdir/etc/fstab"
+
+# configure encrypted boot setup
+test "$is_crypt" = "y" &&
+run chroot "$vdir" chmod 000 "/boot/volume.key" &&
+run chroot "$vdir" chmod -R g-rwx,o-rwx "/boot" &&
+run printf "%s\tUUID=%s\t/boot/volume.key\tluks,discard\n" "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/crypttab" &&
+run printf 'install_items+=" /boot/volume.key /etc/crypttab "\n' >>"$vdir/etc/dracut.conf.d/10-crypt.conf" &&
+(test "$(. "$vdir/etc/default/grub"; printf "$GRUB_ENABLE_CRYPTODISK")" != "y" && run printf 'GRUB_ENABLE_CRYPTODISK="y"\n' >>"$vdir/etc/default/grub";:) &&
+run printf 'GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
+run printf 'GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX rd.lvm.vg=%s rd.luks.uuid=%s"\n' "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/default/grub" &&
+
 # install grub
 test -d "/sys/firmware/efi/efivars" && {
-    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
-    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
+    eval 'run chroot "'"$vdir"'" grub-install -v "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
+    eval 'run chroot "'"$vdir"'" grub-install -v "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
 } || {
-    eval 'run chroot "$vdir" grub-install "$disk"'
+    eval 'run chroot "$vdir" grub-install -v "$disk"'
 }
 run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -518,8 +596,11 @@ prep_disk "$disk"
 # cryptsetup volumes
 test "$is_crypt" = "y" &&
 run umount -Rv "$vdir" &&
-run lvchange -van /dev/void/rootfs &&
-run cryptsetup -qv luksClose /dev/mapper/voidlvm
+run lvchange -van "/dev/$luks_vgroup_name/$lvm_main_vol_name" &&
+run cryptsetup -qv luksClose /dev/mapper/"$luks_container_name"
+
+# the disk has (probably) been unmounted cleanly
+in_progress=""
 
 # if everything succeeds, we probably don't need the tarball anymore
-run rm -rf "$scriptdir/cache"
+test "$keep_cache" != "y" && run rm -rf "$scriptdir/cache"
