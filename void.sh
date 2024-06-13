@@ -2,8 +2,6 @@
 
 # vi: ts=4 sw=4 sts=4 et
 
-# todo: macchanger
-
 
 # Step 0: user config
 # ------------------------------------------------------------------------------
@@ -98,7 +96,6 @@ add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-c
 #add_pkg "bluez bluetuith"; add_sv "bluetoothd"; add_ugrp "bluetooth"
 
 # alsa audio, uncomment if you want it
-# TODO: copy /usr/lib/ladspa/caps.so to /usr/lib/
 add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "bluez-alsa"
 
 # pipewire audio, uncomment if you want it
@@ -287,6 +284,17 @@ prep_disk() {
     return 0
 }
 
+# get/compare/format timestamps
+get_timestamp() { test "$(date +%N)" = "%N" && printf "%d" "$(date +%s)" && return; printf "%1.3f" "$(date +%s.%N)"; }
+diff_timestamp() { awk -v a="${1:-0}" -v b="${2:-0}" 'BEGIN{print b - a; exit}'; }
+fmt_timestamp() {
+    sec="${1%%.*}"; ms="${1##$sec}"; day="$((sec / 86400))"; sec="$((sec % 86400))"; hr="$((sec / 3600))"; sec="$((sec % 3600))"; min="$((sec / 60))"; sec="$((sec % 60))"; sec="$sec$ms"
+    printf "$(test "$day" -gt 0 && printf "%%d%%s%%s%%s")" "$day" "$(test "$time_fmt" = "s" && printf "d" || printf " day")" "$(test "$day" != "1" -a "$time_fmt" != "s" && printf "s")" "$(test "$hr" = "0" -a "$min" = "0" -a "$sec" = "0" || printf ", ")"
+    printf "$(test "$hr" -gt 0 && printf "%%d%%s%%s%%s")" "$hr" "$(test "$time_fmt" = "s" && printf "h" || printf " hour")" "$(test "$hr" != "1" -a "$time_fmt" != "s" && printf "s")" "$(test "$min" = "0" -a "$sec" = "0" || printf ", ")"
+    printf "$(test "$min" -gt 0 && printf "%%d%%s%%s%%s")" "$min" "$(test "$time_fmt" = "s" && printf "h" || printf " minute")" "$(test "$min" != "1" -a "$time_fmt" != "s" && printf "s")" "$(test "$sec" = "0" -a "$sec" = "0" || printf ", ")"
+    printf "$(test "$sec" != "0" && printf "%%s%%s%%s")" "$sec" "$(test "$time_fmt" = "s" -o "${sec%%.*}" = "0" && printf "s" || printf " second")" "$(test "$sec" != "1" -a "$sec" != "1.000" -a "${sec%%.*}" != "0" -a "$time_fmt" != "s" && printf "s")"
+}
+
 # used when the script exits by error/completion/pkill
 exit_signal() {
     stty echo 2>/dev/null
@@ -443,6 +451,9 @@ test "$efipart" != "" && ! (req_cmds mkfs.fat) && pkgm dosfstools
 # Step 4: partition the disk
 # ------------------------------------------------------------------------------
 
+# get starting time
+install_time_start="$(get_timestamp)"
+
 # if partitioning is done automatically
 test "$partmethod" != "manual" && {
     # set up the disk
@@ -580,6 +591,9 @@ run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 # reconfigure packages
 run chroot "$vdir" xbps-reconfigure -vfa
 
+# get end time
+install_time_end="$(get_timestamp)"
+
 
 # Step 6: clean up and exit
 # ------------------------------------------------------------------------------
@@ -607,3 +621,6 @@ in_progress=""
 
 # if everything succeeds, we probably don't need the tarball anymore
 test "$keep_cache" != "y" && run rm -rf "$scriptdir/cache"
+
+# print install duration
+printf "\nInstall finished (took %s)\n" "$disk" "$(fmt_timestamp "$install_time_start" "$install_time_end")"
