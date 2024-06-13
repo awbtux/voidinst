@@ -510,16 +510,16 @@ run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
 run cp -v /etc/resolv.conf "$vdir/etc/"
 
 # install packages
-run chroot "$vdir" xbps-install -Suy base-container-full $PACKAGES
+run chroot "$vdir" xbps-install -Svyu base-container-full $PACKAGES
 
 # install nonfree packages
-run chroot "$vdir" xbps-install -Sy $NONFREE_PACKAGES
+run chroot "$vdir" xbps-install -Svy $NONFREE_PACKAGES
 
 # remove packages
-run chroot "$vdir" xbps-remove -y $DEL_PACKAGES
+run chroot "$vdir" xbps-remove -vy $DEL_PACKAGES
 
 # configure libc locales
-run sed "s/#$language/$language/g" -i "$vdir/etc/default/libc-locales"
+run chroot "$vdir" sed "s/#$language/$language/g" -i "/etc/default/libc-locales"
 run printf "LANG=$language.UTF-8\nLC_ALL=$language.UTF-8\nLC_COLLATE=C" >"$vdir/etc/locale.conf"
 
 # set hostname
@@ -532,12 +532,12 @@ run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
 test -f "/etc/wpa_supplicant/wpa_supplicant.conf" && run cp -v /etc/wpa_supplicant/wpa_supplicant.conf "$vdir/etc/wpa_supplicant/wpa_supplicant.conf"
 
 # root shell
-run chroot "$vdir" usermod -s "$root_shell" root
+run chroot "$vdir" usermod -sb "$root_shell" root
 
 # root password
 printf "%s\n%s\n" "$root_password" "$root_password" | run chroot "$vdir" passwd root
 
-# copy user's /etc
+# copy custom /etc overrides
 test -d "$scriptdir/etc/skel" && run rm -rf "$vdir/etc/skel"
 run cp -rfv "$scriptdir/etc" "$vdir"
 
@@ -549,16 +549,16 @@ done
 # create users
 for i in $(seq 1 ${userct:-0}); do
     eval 'run chroot "$vdir" useradd -mG "$user_'"$i"'_groups" -s "$user_'"$i"'_shell" -c "$user_'"$i"'_comment" "$user_'"$i"'_name"'
-    eval 'printf "$user_'"$i"'_password\n$user_'"$i"'_password\n" | run chroot "$vdir" passwd $user_'"$i"'_name'
+    eval 'printf "%s\n%s\n" "$user_'"$i"'_password" "$user_'"$i"'_password" | run chroot "$vdir" passwd $user_'"$i"'_name'
 done
 
-# write fstab
-run write_fstab >"$vdir/etc/fstab"
+# write the filesystem table if the script knows how to do it
+test "$partmethod" != "manual" && run write_fstab >"$vdir/etc/fstab"
 
 # configure encrypted boot setup
 test "$is_crypt" = "y" &&
-run chroot "$vdir" chmod 000 "/boot/volume.key" &&
-run chroot "$vdir" chmod -R g-rwx,o-rwx "/boot" &&
+run chroot "$vdir" chmod -v 000 "/boot/volume.key" &&
+run chroot "$vdir" chmod -vR g-rwx,o-rwx "/boot" &&
 run printf "%s\tUUID=%s\t/boot/volume.key\tluks,discard\n" "$luks_container_name" "$(blk_uuid "${partprefix}${mainpart}")" >>"$vdir/etc/crypttab" &&
 run printf 'install_items+=" /boot/volume.key /etc/crypttab "\n' >>"$vdir/etc/dracut.conf.d/10-crypt.conf" &&
 (test "$(. "$vdir/etc/default/grub"; printf "$GRUB_ENABLE_CRYPTODISK")" != "y" && run printf 'GRUB_ENABLE_CRYPTODISK="y"\n' >>"$vdir/etc/default/grub";:) &&
@@ -575,7 +575,7 @@ test -d "/sys/firmware/efi/efivars" && {
 run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 
 # reconfigure packages
-run chroot "$vdir" xbps-reconfigure -fa
+run chroot "$vdir" xbps-reconfigure -vfa
 
 
 # Step 20: clean up and exit
