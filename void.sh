@@ -623,4 +623,4 @@ in_progress=""
 test "$keep_cache" != "y" && run rm -rf "$scriptdir/cache"
 
 # print install duration
-printf "\nInstall finished (took %s)\n" "$disk" "$(fmt_timestamp "$install_time_start" "$install_time_end")"
+printf "\nInstall finished (took %s)\n" "$disk" "$(fmt_timestamp "$(diff_timestamp "$install_time_start" "$install_time_end")")"
