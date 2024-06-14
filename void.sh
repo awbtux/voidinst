@@ -25,27 +25,32 @@ test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(
 # name of the boot device entry on EFI; leave blank or set it to "Void Linux" and the script will manage it automatically
 efi_entry_name="Void Linux"
 
-# names of partitions/filesystems/containers
+# names of partitions/filesystems
 bios_partition_name="voidmbr"
 efi_partition_name="voidefi"
 swap_partition_name="voidswap"
-luks_container_name="voidlvm" # name for the main partition when using encryption
-luks_vgroup_name="void" # name of the volume group created under the luks container
-lvm_main_vol_name="rootfs" # name of the logical volume containing the root filesystem
 root_partition_name="voidrootfs" # name for unencrypted main partition
 efi_fat32_label="VOIDEFI"
+lvm_main_vol_name="rootfs"
+
+# basenames of luks/lvm stuff; these get salted to prevent name collisions
+luks_vgroup_basename="void"
+luks_container_basename="voidlvm"
 
 # root filesystem type: can be ext4, ext3, ext2, f2fs, btrfs, xfs
 filesystem="f2fs"
 
-# root user's shell
-root_shell="/bin/bash"
-
 # mkfs.$filesystem options for root
 mkfs_opts="-l '$root_partition_name'"
 
+# root user's shell
+root_shell="/bin/bash"
+
 # language & glibc locale
 language="en_US"
+
+# time zone, see /usr/share/zoneinfo
+timezone="America/Los_Angeles"
 
 # printf "$hostname\n" >"$vdir/etc/hostname"
 hostname="Connors-Macbook-Air"
@@ -140,7 +145,7 @@ add_pkg "river alacritty yambar grim"
 add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 
 # amd graphics drivers, uncomment if you want them
-#add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
+add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
 #add_pkg "xf86-video-amdgpu xf86-video-ati"     # <-- install if using x11, otherwise no need
 
 # open source nvidia graphics drivers, uncomment if you want them
@@ -148,7 +153,7 @@ add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 #add_pkg "xf86-video-nouveau"     # <-- install if using x11, otherwise no need
 
 # proprietary nvidia driver, uncomment if you want it
-#add_pkn "nvidia"
+add_pkn "nvidia"
 
 # `tlp` battery utility, uncomment if you want it
 #add_pkg "tlp"; add_sv "tlp"
@@ -256,7 +261,7 @@ provision_fdisk() {
     test "$is_swap" = "y" && swappart="2" && mainpart="3"
     test "$is_swap" = "y" -a "$efipart" = "2" && swappart="3" && mainpart="4"
     test "$is_swap" = "y" && fdiskcmd="${fdiskcmd}n\n${swappart}\n\n+${swap_mb}M\nt\n${swappart}\n19\nx\nn\n${swappart}\n$swap_partition_name\nr\n"
-    test "$is_crypt" = "y" && parttype="44" && partname="$luks_container_name" || ! parttype="20" || partname="$root_partition_name"
+    test "$is_crypt" = "y" && parttype="44" && partname="$luks_container_basename" || ! parttype="20" || partname="$root_partition_name"
     printf "${fdiskcmd}n\n${mainpart}\n\n\nt\n${mainpart}\n${parttype}\nx\nn\n${mainpart}\n${partname}\nr\nw\n" | run fdisk -w always -W always "$disk"
     while test ! -r "${partprefix:=$(printf "$disk"*1)}"; do partprefix="$(printf "$disk"*1)"; done; partprefix="${partprefix%1}"
 }
@@ -334,6 +339,10 @@ test "${EUID:-${UID:-$(id -u 2>/dev/null)}}" != "0" && (error "Operation not per
 } || {
     vdir="/tmp/voidinst/mnt"
 }
+
+# salt container/logical volume names to prevent name collisions
+luks_container_name="${luks_container_basename}_$( (tr -dc A-Za-z0-9 </dev/urandom | head -c2) || printf "%s" "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -An -tx1)")"
+luks_vgroup_name="${luks_vgroup_basename}_$( (tr -dc A-Za-z0-9 </dev/urandom | head -c2) || printf "%s" "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -An -tx1)")"
 
 # create dirs
 test ! -d "$vdir" && ! mkdir -p "$vdir" && exit 1
@@ -523,14 +532,19 @@ run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
 # use network in the chroot
 run cp -v /etc/resolv.conf "$vdir/etc/"
 
+# use the other mirror
+for f in $(find "$vdir/usr/share/xbps.d" -type f); do
+    run chroot "$vdir" sed "s/repo-default.voidlinux.org/$mirror/g" -i "${f##$vdir}"
+done
+
 # install packages
-run chroot "$vdir" xbps-install -Svyu base-container-full $PACKAGES
+run chroot "$vdir" xbps-install -Syu base-container-full $PACKAGES
 
 # install nonfree packages
-run chroot "$vdir" xbps-install -Svy $NONFREE_PACKAGES
+run chroot "$vdir" xbps-install -Sy $NONFREE_PACKAGES
 
 # remove packages
-run chroot "$vdir" xbps-remove -vy $DEL_PACKAGES
+run chroot "$vdir" xbps-remove -y $DEL_PACKAGES
 
 # configure libc locales
 run chroot "$vdir" sed "s/#$language/$language/g" -i "/etc/default/libc-locales"
@@ -538,6 +552,9 @@ run printf "LANG=$language.UTF-8\nLC_ALL=$language.UTF-8\nLC_COLLATE=C" >"$vdir/
 
 # set hostname
 run printf "%s\n" "$hostname" >"$vdir/etc/hostname"
+
+# set timezone
+run chroot "$vdir" ln -sfv "/usr/share/zoneinfo/${timezone:-America/Los_Angeles}" "/etc/localtime"
 
 # link doas to sudo
 run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
@@ -589,7 +606,7 @@ test -d "/sys/firmware/efi/efivars" && {
 run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 
 # reconfigure packages
-run chroot "$vdir" xbps-reconfigure -vfa
+run chroot "$vdir" xbps-reconfigure -fa
 
 # get end time
 install_time_end="$(get_timestamp)"
