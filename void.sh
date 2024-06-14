@@ -598,8 +598,8 @@ run printf 'GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX rd.lvm.vg=%s rd.luks.uuid=%s
 
 # install grub
 test -d "/sys/firmware/efi/efivars" && {
-    eval 'run chroot "'"$vdir"'" grub-install -v "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
-    eval 'run chroot "'"$vdir"'" grub-install -v "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
+    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
+    eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
 } || {
     eval 'run chroot "$vdir" grub-install -v "$disk"'
 }
