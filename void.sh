@@ -145,7 +145,7 @@ add_pkg "river alacritty yambar grim"
 add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 
 # amd graphics drivers, uncomment if you want them
-add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
+#add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
 #add_pkg "xf86-video-amdgpu xf86-video-ati"     # <-- install if using x11, otherwise no need
 
 # open source nvidia graphics drivers, uncomment if you want them
@@ -153,7 +153,7 @@ add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
 #add_pkg "xf86-video-nouveau"     # <-- install if using x11, otherwise no need
 
 # proprietary nvidia driver, uncomment if you want it
-add_pkn "nvidia"
+#add_pkn "nvidia"
 
 # `tlp` battery utility, uncomment if you want it
 #add_pkg "tlp"; add_sv "tlp"
