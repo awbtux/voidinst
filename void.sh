@@ -86,7 +86,7 @@ add_pkg "linux-firmware-intel"
 add_pkg "linux-firmware-network"
 
 # dev packages, uncomment if you want them
-add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
+#add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
 
 # java runtimes, uncomment if you want them (you probably don't)
 #add_pkg "openjdk8-jre openjdk11-jre openjdk17-jre openjdk21-jre"
@@ -101,7 +101,7 @@ add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-c
 #add_pkg "bluez bluetuith"; add_sv "bluetoothd"; add_ugrp "bluetooth"
 
 # alsa audio, uncomment if you want it
-add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "bluez-alsa"
+#add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "bluez-alsa"
 
 # pipewire audio, uncomment if you want it
 #add_pkg "wireplumber pipewire alsa-pipewire"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "libspa-bluetooth"
@@ -130,7 +130,7 @@ add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; t
 #add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
 
 # wayland display server, uncomment if you want it
-add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
+#add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
 
 # x11 display server, uncomment if you want it
 #add_pkg "xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server"
@@ -139,10 +139,10 @@ add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard
 #add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard wlr-randr xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server xorg-server-xwayland"; add_ugrp "_seatd"; add_sv "seatd"
 
 # my wayland graphical environment, uncomment if you want it
-add_pkg "river alacritty yambar grim"
+#add_pkg "river alacritty yambar grim"
 
 # intel graphics drivers, uncomment if you want them
-add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
+#add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 
 # amd graphics drivers, uncomment if you want them
 #add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
@@ -162,10 +162,10 @@ add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg htop lf libsixel-util ncdu neofetch neovim odt2txt pfetch pv qsv ripgrep sc-im socat tmux unzip wget wget wimlib yash zip zsh zstd"
 
 # same as above, separated due to multimedia/display library dependencies
-add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
+#add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
 
 # firefox web browser, uncomment if you want it; this gets its own line because of how bloated it is
-add_pkg "firefox"
+#add_pkg "firefox"
 
 # my mail setup, uncomment if you want it
 #add_pkg "abook notmuch neomutt"
@@ -193,14 +193,14 @@ error() { printf "%s: error: %s\n" "$0" "$1" >&2; exit ${2:-1}; }
 is_empty() { for mty in "$1"/*; do test -e "$mty" && return 1; done; return 0; }
 
 # get properties from block devices
-blk_size()  { test -r "/sys/block/${1##*/}/size" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/size"; }
+blk_size() { test -r "/sys/block/${1##*/}/size" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/size"; }
 blk_model() { test -r "/sys/block/${1##*/}/device/model" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/device/model"; }
 blk_vendor() { test -r "/sys/block/${1##*/}/device/vendor" && while IFS= read -r line; do printf "%s" "$line"; done <"/sys/block/${1##*/}/device/vendor"; }
-blk_uuid()  { for blk in /dev/disk/by-uuid/*; do case "$(readlink -f "$blk")" in /dev/"${1##*/}"|"$1") printf "${blk##*/}"; return 0; esac; done; return 1; }
+blk_uuid() { for blk in /dev/disk/by-uuid/*; do case "$(readlink -f "$blk")" in /dev/"${1##*/}"|"$1") printf "${blk##*/}"; return 0; esac; done; return 1; }
 
 # command handlers
-req_cmds() { for rcmd in "$@"; do command -v "$rcmd" >/dev/null 2>&1 || error "$rcmd: command not found" 127; done; return 0; }
-run() { req_cmds "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*" >&2; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; case "$cmd" in mount|swapon) in_progress="y" ;; esac; }
+require() { for rcmd in "$@"; do command -v "$rcmd" >/dev/null 2>&1 && continue; error "$rcmd: command not found" 127; done; return 0; }
+run() { require "$1" && cmd="$1" && shift; printf "\033[90m\$\033[39;3m %s %s\033[0m\n" "$cmd" "$*" >&2; "$cmd" "$@" || test "$nobreak" = "y" || error "command \`$cmd $*\` returned code $?"; case "$cmd" in mount|swapon) in_progress="y" ;; esac; }
 
 # implement missing commands
 command -v seq >/dev/null 2>&1 || seq() { from="$1"; while test "$from" -le "$2"; do printf "$from "; from="$((from+1))"; done; }
@@ -250,7 +250,7 @@ pkgm() {
         "prt-get sync;prt-get -y $i" "slack$p $u$y|slack$p $i" "o$p $u$y|o$p $i" "eo$p $u-repo;eo$p $i -y" "cards $u;cards $i -y" "urpmi.$u -a;urpmi -a" \
         "dnf $u --refresh;dnf $i -y" "yum check-$u;yum -y $i" "zypper refresh;zypper -n $i" "apt $u;apt $i -y" "pacman -Sy$y|pacman -S" "xbps-$i -Sy" "apk $u;apk add"
     do command -v "${cmd%% *}" >/dev/null 2>&1 && pkgm="$cmd";:
-    done && test "$pkgm" != "${pkgm##${pkgm%%;*};}" && eval "${pkgm%%;*};:" && pkgm="${pkgm##${pkgm%%;*};}"; eval "$pkgm \"\$@\""
+    done && test "$pkgm" != "${pkgm##${pkgm%%;*};}" && eval "${pkgm%%;*};:" && pkgm="${pkgm##${pkgm%%;*};}"; eval "$pkgm"' "$@"'
 }
 
 # partition the disk
@@ -315,7 +315,7 @@ exit_signal() {
 # ------------------------------------------------------------------------------
 
 # we need these
-req_cmds awk mkdir
+require awk mkdir
 
 # cd to the directory of the script
 IFS="/"
@@ -341,8 +341,8 @@ test "${EUID:-${UID:-$(id -u 2>/dev/null)}}" != "0" && (error "Operation not per
 }
 
 # salt container/logical volume names to prevent name collisions
-luks_container_name="${luks_container_basename}_$( (tr -dc A-Za-z0-9 </dev/urandom | head -c2) || printf "%s" "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -An -tx1)")"
-luks_vgroup_name="${luks_vgroup_basename}_$( (tr -dc A-Za-z0-9 </dev/urandom | head -c2) || printf "%s" "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | od -An -tx1)")"
+luks_container_name="${luks_container_basename}.$(tr -dc 0-9 </dev/urandom 2>/dev/null | head -c3 2>/dev/null || printf "$((${$##${$%%?}}*($(date +10%-S 2>/dev/null || printf "${$%%${$##?}}${$##${$%%?}}"))))")"
+luks_vgroup_name="${luks_vgroup_basename}.$(tr -dc 0-9 </dev/urandom 2>/dev/null | head -c3 2>/dev/null || printf "$((${$##${$%%?}}*($(date +10%-S 2>/dev/null || printf "${$%%${$##?}}${$##${$%%?}}"))))")"
 
 # create dirs
 test ! -d "$vdir" && ! mkdir -p "$vdir" && exit 1
@@ -438,7 +438,7 @@ done
 
 # try pinging voidlinux.org
 printf "Testing network...\n"
-while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
+while ! (ping -c 1 "${mirror:=repo-default.voidlinux.org}") >/dev/null 2>&1; do
     setup_net="$(nummode="y" chmenu "How would you like to set up an internet connection?" "Add a wireless network to wpa_supplicant" "Retry network config (restart runit services)" "Test connection" "Proceed without testing connection")"
     test "$setup_net" = "1" && netname="$(chopt 'What is the network name/SSID?')" && netpw="$(chopt 'What is the password? [ENTER=none]')" && (
     test -n "$netname" -a -z "$netpw" && printf "network={\n\tssid=\"$netname\"\n}\n" >>/etc/wpa_supplicant/wpa_supplicant.conf && return
@@ -449,12 +449,24 @@ while ! ping -c 1 "${mirror:=repo-default.voidlinux.org}" >/dev/null 2>&1; do
 done
 
 # install required utils
-(req_cmds wget) || pkgm wget
-(req_cmds mount umount mkswap swapon swapoff) || pkgm util-linux
-(req_cmds tar) || pkgm tar
-test "$is_crypt" = "y" && ! (req_cmds cryptsetup) && pkgm cryptsetup
-test "$is_crypt" = "y" && ! (req_cmds lvcreate lvchange vgcreate) && pkgm lvm2
-test "$efipart" != "" && ! (req_cmds mkfs.fat) && pkgm dosfstools
+test "$partmethod" != "$manual" && {
+    test "$is_crypt" = "y" && ! (require cryptsetup) && run pkgm "cryptsetup"
+    test "$is_crypt" = "y" && ! (require lvcreate lvchange vgcreate) && run pkgm "lvm2"
+    test "$efipart" != "" && ! (require mkfs.fat) && run pkgm "dosfstools"
+    test "$filesystem" = "f2fs" && ! (require mkfs.f2fs) && run pkgm f2fs-tools && mkfs="has"
+    test "$filesystem" = "btrfs" && ! (require mkfs.btrfs) && run pkgm btrfs-progs && mkfs="has"
+    test "$filesystem" = "xfs" && ! (require mkfs.xfs) && run pkgm xfsprogs && mkfs="has"
+    test "$filesystem" = "ext2" && ! (require mkfs.ext2) && run pkgm e2fsprogs && mkfs="has"
+    test "$filesystem" = "ext3" && ! (require mkfs.ext3) && run pkgm e2fsprogs && mkfs="has"
+    test "$filesystem" = "ext4" && ! (require mkfs.ext4) && run pkgm e2fsprogs && mkfs="has"
+    test "$mkfs" != "has" && require "mkfs.$filesystem"
+}
+(require wget) || test -d "$scriptdir/cache/$tarball" || run pkgm "wget"
+(require mount umount mkswap swapon swapoff) || run pkgm "util-linux"
+(require tar) || run pkgm "tar"
+(require cp chroot mkdir readlink head tr rm) || run pkgm "coreutils"
+(require awk) || run pkgm "gawk"
+(require sed) || pkgm "sed"
 
 
 # Step 4: partition the disk
@@ -513,38 +525,44 @@ run mount -v --make-rslave "$vdir/run"
 # Step 5: configure/install the system
 # ------------------------------------------------------------------------------
 
-# download tarball
-run cd "$scriptdir/cache"
-test ! -r "$tarball" && run wget -v "https://${mirror:=repo-default.voidlinux.org}/live/current/$tarball"
-
-# extract at the new root
-run cd "$vdir"
-run tar -xpf "$scriptdir/cache/$tarball"
+# download tarball and extract it at the new root
+while true; do
+    run cd "$scriptdir/cache"
+    test ! -r "$tarball" && run wget -v "https://${mirror:=repo-default.voidlinux.org}/live/current/$tarball"
+    run cd "$vdir"
+    (run tar -xpf "$scriptdir/cache/$tarball") && break
+    run rm -v "$scriptdir/cache/$tarball"
+done
 
 # xbps env vars
 export XBPS_REPO="https://${mirror:=repo-default.voidlinux.org}/current""$(test -z "${arch%%*musl*}" && printf "/musl")"
 export XBPS_ARCH="$arch"
 
 # copy xbps keys
-run mkdir -pv $VDIR/var/db/xbps/keys
-run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
+run mkdir -pv "$vdir/var/db/xbps/keys"
+test -d /var/db/xbps/keys && run cp -v /var/db/xbps/keys/* "$vdir/var/db/xbps/keys/"
 
 # use network in the chroot
-run cp -v /etc/resolv.conf "$vdir/etc/"
+test -r /etc/resolv.conf && run cp -v /etc/resolv.conf "$vdir/etc/"
 
 # use the other mirror
 for f in $(find "$vdir/usr/share/xbps.d" -type f); do
     run chroot "$vdir" sed "s/repo-default.voidlinux.org/$mirror/g" -i "${f##$vdir}"
 done
 
+# update existing packages
+run chroot "$vdir" xbps-install -Sfyu
+
 # install packages
-run chroot "$vdir" xbps-install -Syu base-container-full $PACKAGES
+run chroot "$vdir" xbps-install -fy $PACKAGES
 
 # install nonfree packages
-run chroot "$vdir" xbps-install -Sy $NONFREE_PACKAGES
+test -n "$NONFREE_PACKAGES" &&
+run chroot "$vdir" xbps-install -fy $NONFREE_PACKAGES
 
 # remove packages
-run chroot "$vdir" xbps-remove -y $DEL_PACKAGES
+test -n "$DEL_PACKAGES" &&
+run chroot "$vdir" xbps-remove -fy $DEL_PACKAGES
 
 # configure libc locales
 run chroot "$vdir" sed "s/#$language/$language/g" -i "/etc/default/libc-locales"
@@ -579,7 +597,7 @@ done
 
 # create users
 for i in $(seq 1 ${userct:-0}); do
-    eval 'run chroot "$vdir" useradd -mG "$user_'"$i"'_groups" -s "$user_'"$i"'_shell" -c "$user_'"$i"'_comment" "$user_'"$i"'_name"'
+    eval 'run chroot "$vdir" useradd --badname -mG "$user_'"$i"'_groups" -s "$user_'"$i"'_shell" -c "$user_'"$i"'_comment" "$user_'"$i"'_name"'
     eval 'printf "%s\n%s\n" "$user_'"$i"'_password" "$user_'"$i"'_password" | run chroot "$vdir" passwd $user_'"$i"'_name'
 done
 
@@ -601,7 +619,7 @@ test -d "/sys/firmware/efi/efivars" && {
     eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi --removable'
     eval 'run chroot "'"$vdir"'" grub-install "'"$disk"'" --target="'"$grub_target"'" --bootloader-id="'"$efi_entry_name"'" --efi-directory=/boot/efi'
 } || {
-    eval 'run chroot "$vdir" grub-install -v "$disk"'
+    eval 'run chroot "$vdir" grub-install "$disk"'
 }
 run chroot "$vdir" grub-mkconfig -o /boot/grub/grub.cfg
 
