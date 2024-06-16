@@ -1,0 +1,9 @@
+#!/bin/sh
+# everything below will be appended to grub.cfg
+exec tail -n +4 $0
+menuentry 'Power off [p]' --hotkey='p' {
+	halt
+}
+menuentry 'Reboot [r]' --hotkey='r' {
+	reboot
+}

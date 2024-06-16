@@ -68,7 +68,7 @@ keep_cache="y"
 warn=""
 
 # generally useful system packages
-add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"; add_sv "wpa_supplicant dhcpcd"
+add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas openssl psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"; add_sv "wpa_supplicant dhcpcd"
 
 # we don't need these
 del_pkg "base-container-full sudo"
@@ -86,7 +86,7 @@ add_pkg "linux-firmware-intel"
 add_pkg "linux-firmware-network"
 
 # dev packages, uncomment if you want them
-#add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
+add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
 
 # java runtimes, uncomment if you want them (you probably don't)
 #add_pkg "openjdk8-jre openjdk11-jre openjdk17-jre openjdk21-jre"
@@ -101,7 +101,7 @@ add_pkg "linux-firmware-network"
 #add_pkg "bluez bluetuith"; add_sv "bluetoothd"; add_ugrp "bluetooth"
 
 # alsa audio, uncomment if you want it
-#add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "bluez-alsa"
+add_pkg "alsa-utils alsa-plugins apulse libspa-alsa alsaequal"; add_sv "alsa"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "bluez-alsa"
 
 # pipewire audio, uncomment if you want it
 #add_pkg "wireplumber pipewire alsa-pipewire"; test "$PACKAGES" != "${PACKAGES##*bluez*}" && add_pkg "libspa-bluetooth"
@@ -130,7 +130,7 @@ add_pkg "linux-firmware-network"
 #add_pkg "avahi nss-mdns"; add_sv "avahi-daemon"
 
 # wayland display server, uncomment if you want it
-#add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
+add_pkg "wayland seatd wlroots wlroots-devel way-displays wlr-randr wl-clipboard xdg-utils mesa-dri vulkan-loader"; add_ugrp "_seatd"; add_sv "seatd"
 
 # x11 display server, uncomment if you want it
 #add_pkg "xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server"
@@ -139,10 +139,10 @@ add_pkg "linux-firmware-network"
 #add_pkg "wayland seatd wlroots wlroots-devel way-displays wl-clipboard wlr-randr xdg-utils mesa-dri vulkan-loader xbacklight xclip xdpyinfo xinit xinput xkbutils xprop xrandr xrdb xset xsetroot xf86-input-evdev xf86-input-libinput xf86-input-synaptics libX11 libXft libXcursor libXinerama libX11-devel libXft-devel libXinerama-devel libXcursor-devel xorg-server xorg-server-xwayland"; add_ugrp "_seatd"; add_sv "seatd"
 
 # my wayland graphical environment, uncomment if you want it
-#add_pkg "river alacritty yambar grim"
+add_pkg "river alacritty yambar grim"
 
 # intel graphics drivers, uncomment if you want them
-#add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
+add_pkg "mesa-dri mesa-vulkan-intel intel-video-accel"
 
 # amd graphics drivers, uncomment if you want them
 #add_pkg "mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon"
@@ -162,10 +162,10 @@ add_pkg "linux-firmware-network"
 add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg htop lf libsixel-util ncdu neofetch neovim odt2txt pfetch pv qsv ripgrep sc-im socat tmux unzip wget wget wimlib yash zip zsh zstd"
 
 # same as above, separated due to multimedia/display library dependencies
-#add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
+add_pkg "mpv ffmpeg yt-dlp fbpdf mupdf playerctl"
 
 # firefox web browser, uncomment if you want it; this gets its own line because of how bloated it is
-#add_pkg "firefox"
+add_pkg "firefox"
 
 # my mail setup, uncomment if you want it
 #add_pkg "abook notmuch neomutt"
@@ -187,7 +187,7 @@ add_pkg "7zip bat busybox curl docx2txt elinks exiftool fbgrab fmt fzf gnupg hto
 alias printf="printf --"
 
 # print an error and exit
-error() { printf "%s: error: %s\n" "$0" "$1" >&2; exit ${2:-1}; }
+error() { exit_signal; printf "%s: error: %s\n" "$0" "$1" >&2; exit ${2:-1}; }
 
 # check whether a directory is empty
 is_empty() { for mty in "$1"/*; do test -e "$mty" && return 1; done; return 0; }
@@ -302,12 +302,18 @@ fmt_timestamp() {
 
 # used when the script exits by error/completion/pkill
 exit_signal() {
+    trap '' EXIT
     stty echo 2>/dev/null
-    test "$in_progress" = "y" &&
-    printf "\033[1;33mWarning\033[39m:\033[22m %s was not freed cleanly and might still be in use.\n" "$disk" &&
-    printf "Use the '\033[3mumount\033[0m', '\033[3mswapoff\033[0m', '\033[3mlvchange -an\033[0m', and '\033[3mcryptsetup luksClose\033[0m'\n" &&
-    printf "commands on mounted filesystems, enabled swaps, activated LVM volumes, and\n" &&
-    printf "opened LUKS containers, respectively.\n"
+    test "$in_progress" != "y" && return
+    run cd "$scriptdir"
+    while ! is_empty "$vdir/dev"; do (run umount -R "$vdir/dev"); done
+    while ! is_empty "$vdir/sys"; do (run umount -R "$vdir/sys"); done
+    while ! is_empty "$vdir/run"; do (run umount -R "$vdir/run"); done
+    while ! is_empty "$vdir/proc"; do (run umount -R "$vdir/proc"); done
+    while ! is_empty "$vdir"; do (run umount -R "$vdir"); done
+    test -e "/dev/$luks_vgroup_name/$lvm_main_vol_name" && in_progress="y" && (run lvchange -an "/dev/$luks_vgroup_name/$lvm_main_vol_name") && in_progress=""
+    test -e "/dev/mapper/$luks_container_name" && in_progress="y" && (run cryptsetup -q luksClose "/dev/mapper/$luks_container_name") && in_progress=""
+    test "$in_progress" = "y" && printf "\033[1;33mWarning\033[39m:\033[22m %s was not freed cleanly and might still be in use.\n" "$disk"
 }
 
 
@@ -350,7 +356,7 @@ test ! -d "$scriptdir/cache" && ! mkdir -p "$scriptdir/cache" && exit 1
 
 # trap these signals
 for sig in HUP QUIT INT TERM ABRT KILL STOP SYS; do
-    trap '{ printf "\n%s: recieved signal '"$sig"'\n" "$0"; exit 2; }' "$sig"
+    trap '{ exit_signal; printf "\n%s: recieved signal '"$sig"'\n" "$0"; exit 2; }' "$sig"
 done
 
 # when the script exits normally, the signal doesn't need to be printed
@@ -461,10 +467,11 @@ test "$partmethod" != "$manual" && {
     test "$filesystem" = "ext4" && ! (require mkfs.ext4) && run pkgm e2fsprogs && mkfs="has"
     test "$mkfs" != "has" && require "mkfs.$filesystem"
 }
+(require xz) || run pkgm "xz"
 (require wget) || test -d "$scriptdir/cache/$tarball" || run pkgm "wget"
-(require mount umount mkswap swapon swapoff) || run pkgm "util-linux"
+(require mount umount mkswap swapon swapoff fdisk) || run pkgm "util-linux"
 (require tar) || run pkgm "tar"
-(require cp chroot mkdir readlink head tr rm) || run pkgm "coreutils"
+(require sort cp chroot mkdir readlink head tr rm sleep) || run pkgm "coreutils"
 (require awk) || run pkgm "gawk"
 (require sed) || pkgm "sed"
 
@@ -565,20 +572,23 @@ test -n "$DEL_PACKAGES" &&
 run chroot "$vdir" xbps-remove -fy $DEL_PACKAGES
 
 # configure libc locales
-run chroot "$vdir" sed "s/#$language/$language/g" -i "/etc/default/libc-locales"
-run printf "LANG=$language.UTF-8\nLC_ALL=$language.UTF-8\nLC_COLLATE=C" >"$vdir/etc/locale.conf"
+test -r "$vdir/etc/default/libc-locales" && run chroot "$vdir" sed "s/#$language/$language/g" -i "/etc/default/libc-locales"
+run printf "LANG=$language.UTF-8\nLC_ALL=$language.UTF-8\nLC_COLLATE=C\n" >"$vdir/etc/locale.conf"
 
 # set hostname
 run printf "%s\n" "$hostname" >"$vdir/etc/hostname"
 
+# fix broken ladspa shared lib path
+test -r "$vdir/usr/lib/ladspa/caps.so" -a ! -r "$vdir/usr/lib/caps.so" && run chroot "$vdir" ln -sfv "/usr/lib/ladspa/caps.so" "/usr/lib/caps.so"
+
 # set timezone
-run chroot "$vdir" ln -sfv "/usr/share/zoneinfo/${timezone:-America/Los_Angeles}" "/etc/localtime"
+test -d "$vdir/usr/share/zonein${timezone:+fo/$timezone}" && run chroot "$vdir" ln -sfv "/usr/share/zoneinfo/$timezone" "/etc/localtime"
 
 # link doas to sudo
 run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
 
 # copy wpa supplicant config
-test -f "/etc/wpa_supplicant/wpa_supplicant.conf" && run cp -v /etc/wpa_supplicant/wpa_supplicant.conf "$vdir/etc/wpa_supplicant/wpa_supplicant.conf"
+test -f "/etc/wpa_supplicant/wpa_supplicant.conf" -a -d "$vdir/etc/wpa_supplicant" && run cp -v /etc/wpa_supplicant/wpa_supplicant.conf "$vdir/etc/wpa_supplicant/wpa_supplicant.conf"
 
 # root shell
 run chroot "$vdir" usermod -s "$root_shell" root
@@ -633,29 +643,11 @@ install_time_end="$(get_timestamp)"
 # Step 6: clean up and exit
 # ------------------------------------------------------------------------------
 
-# cd to the script dir
-run cd "$scriptdir"
-
-# unmount pseudo-filesystems
-run umount -Rv "$vdir/dev"
-run umount -Rv "$vdir/sys"
-run umount -Rv "$vdir/proc"
-run umount -Rv "$vdir/run"
-
-# disable swaps/mounts for $disk
-prep_disk "$disk"
-
-# cryptsetup volumes
-test "$is_crypt" = "y" &&
-run umount -Rv "$vdir" &&
-run lvchange -van "/dev/$luks_vgroup_name/$lvm_main_vol_name" &&
-run cryptsetup -qv luksClose /dev/mapper/"$luks_container_name"
-
-# the disk has (probably) been unmounted cleanly
-in_progress=""
-
 # if everything succeeds, we probably don't need the tarball anymore
 test "$keep_cache" != "y" && run rm -rf "$scriptdir/cache"
+
+# clean up
+exit_signal
 
 # print install duration
 printf "\nInstall finished (took %s)\n" "$(fmt_timestamp "$(diff_timestamp "$install_time_start" "$install_time_end")")"
