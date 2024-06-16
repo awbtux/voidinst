@@ -68,7 +68,7 @@ keep_cache="y"
 warn=""
 
 # generally useful system packages
-add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas openssl psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"; add_sv "wpa_supplicant dhcpcd"
+add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas openssl psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"
 
 # we don't need these
 del_pkg "base-container-full sudo"
@@ -87,6 +87,12 @@ add_pkg "linux-firmware-network"
 
 # dev packages, uncomment if you want them
 add_pkg "base-devel ncurses-devel openssl-devel zlib-devel bc patch git github-cli"
+
+# leave uncommented if not using something else
+add_sv "wpa_supplicant dhcpcd"
+
+# network manager, uncomment if you want it
+#add_pkg "NetworkManager"; add_sv "NetworkManager"
 
 # java runtimes, uncomment if you want them (you probably don't)
 #add_pkg "openjdk8-jre openjdk11-jre openjdk17-jre openjdk21-jre"
@@ -582,7 +588,7 @@ run printf "%s\n" "$hostname" >"$vdir/etc/hostname"
 test -r "$vdir/usr/lib/ladspa/caps.so" -a ! -r "$vdir/usr/lib/caps.so" && run chroot "$vdir" ln -sfv "/usr/lib/ladspa/caps.so" "/usr/lib/caps.so"
 
 # set timezone
-test -d "$vdir/usr/share/zonein${timezone:+fo/$timezone}" && run chroot "$vdir" ln -sfv "/usr/share/zoneinfo/$timezone" "/etc/localtime"
+test -f "$vdir/usr/share/zonein${timezone:+fo/$timezone}" && run chroot "$vdir" ln -sfv "/usr/share/zoneinfo/$timezone" "/etc/localtime"
 
 # link doas to sudo
 run chroot "$vdir" sh -c 'ln -sfv $(which doas) $(dirname $(which doas))/sudo'
