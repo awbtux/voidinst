@@ -20,7 +20,8 @@ arch="x86_64"
 both_efi_bios="n"
 
 # grub target, shouldn't require intervention
-test "${arch%%-musl}" = "x86_64" -o "${arch%%-musl}" = "i686" && grub_target="$(test -d /sys/firmware/efi/efivars && printf "x86_64-efi" || printf "i386-pc")"
+test "${arch%%-musl}" = "x86_64" && grub_target="$(test -d /sys/firmware/efi/efivars && printf "x86_64-efi" || printf "i386-pc")"
+test "${arch%%-musl}" = "i686" && grub_target="$(test -d /sys/firmware/efi/efivars && printf "i386-efi" || printf "i386-pc")"
 
 # name of the boot device entry on EFI; leave blank or set it to "Void Linux" and the script will manage it automatically
 efi_entry_name="Void Linux"
