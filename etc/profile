@@ -25,13 +25,11 @@ export PATH
 # set default umask
 umask 022
 
-# runtime dir
-if [ -z "$XDG_RUNTIME_DIR" ]; then
-    export XDG_RUNTIME_DIR="/tmp/runtime/${EUID:-${UID:-$(id -u)}}"
-fi
+# set runtime dir
+test -z "$XDG_RUNTIME_DIR" && export XDG_RUNTIME_DIR="/tmp/runtime.${EUID:-${UID:-$(id -u)}}"
 
 # create runtime dir
-mkdir -pm 0700 $XDG_RUNTIME_DIR
+test ! -d "$XDG_RUNTIME_DIR" && mkdir -pm 0700 "$XDG_RUNTIME_DIR"
 
 # load profiles from /etc/profile.d
 if [ -d /etc/profile.d/ ]; then
