@@ -218,14 +218,14 @@ command -v yes >/dev/null 2>&1 || yes() { while :;do printf "%s\n" "${1:-y}";don
 command -v unset >/dev/null 2>&1 || eval 'unset() { for _k in "$@"; do eval "$_k="; eval "$_k() { return 127; }"; done; _k=""; }'
 
 # prompt the user for an option and optionally provide the default
-chopt() { printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1A\033[0J" >&2 && return; test -n "$2" && printf "\033[1A\033[0J" >&2 && printf "$2"; }
+chopt() { printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1F\033[0J" >&2 && return; test -n "$2" && printf "\033[1F\033[0J" >&2 && printf "$2"; }
 
 # create a menu
 chmenu() {
     printf "\033[1m$1\033[22m\n" >&2; linec="$(printf "$1\n" | wc -l 2>/dev/null || printf "1")"; shift
     itmc="$#"; linec="$(($#+linec))"; for itm in "$@"; do itmc="$((itmc-1))"; printf "\033[1m[\033[36m%s\033[39m]\033[22m %s\n" "$(($#-itmc))" "$itm" >&2; done
     while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$#\033[39m]\033[22m " >&2; linec="$((linec+1))"; read inum; test "$inum" -gt "0" -a "$inum" -le "$#" >&- 2>&- && break; done
-    printf "\033[${linec}A\033[0J" >&2; eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
+    printf "\033[${linec}F\033[0J" >&2; eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
 }
 
 # only used for 1 thing...
@@ -248,7 +248,7 @@ mkuser() {
         printf "\n"
         break
     done
-    printf "\033[1A\033[0J" >&2
+    printf "\033[1F\033[0J" >&2
     eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "$GROUPS")"'
     eval 'user_'"$userct"'_shell="$(chopt "What shell should $user_'"$userct"'_name use?" "/bin/bash")"'
     return 0
@@ -401,7 +401,7 @@ while true; do
     test "$inum" -gt 0 -a "$inum" -le "$diskct" >&- 2>&- && break
 done
 eval "disk=\"\$disk$inum\""
-printf "\033[${linec}A\033[0J"
+printf "\033[${linec}F\033[0J"
 unset inum
 
 # decide how to partition $disk
@@ -436,7 +436,7 @@ while true; do
     test -z "$root_password" -a -n "$user_1_password" && root_password="$user_1_password" && root_pwconfirm="$root_password"
     test -z "$root_password" && root_password="1234"
     while test -z "$root_pwconfirm"; do
-        printf "\033[1A\033[0J"
+        printf "\033[1F\033[0J"
         printf "\n\033[1mConfirm password:\033[0m "
         read root_pwconfirm
     done
@@ -449,7 +449,7 @@ done
 # ask the user whether to proceed
 test "$partmethod" != "manual" -a "$warn" != "n" && (
 test "$(chmenu "Disk $disk has been selected for automatic partitioning, which will\noverwrite the current data and partition table. Do you want to continue?" "yes" "no")" != "yes" && return 0
-test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "\033[1A\033[0Jexited\n" >&2 && exit 0
+test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "\033[1F\033[0Jexited\n" >&2 && exit 0
 
 # if partitioning is being done manually
 test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
