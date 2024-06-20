@@ -218,7 +218,7 @@ command -v yes >/dev/null 2>&1 || yes() { while :;do printf "%s\n" "${1:-y}";don
 command -v unset >/dev/null 2>&1 || eval 'unset() { for _k in "$@"; do eval "$_k="; eval "$_k() { return 127; }"; done; _k=""; }'
 
 # prompt the user for an option and optionally provide the default
-chopt() { test ! -t 0 && printf "%s: error: stdin must be a terminal\n" "${0##*/}" >&2 && exit 4printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1F\033[0J" >&2 && return; test -n "$2" && printf "\033[1F\033[0J" >&2 && printf "$2"; }
+chopt() { test ! -t 0 && printf "%s: error: stdin must be a terminal\n" "${0##*/}" >&2 && exit 4; printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1F\033[0J" >&2 && return; test -n "$2" && printf "\033[1F\033[0J" >&2 && printf "$2"; }
 
 # create a menu
 chmenu() {
