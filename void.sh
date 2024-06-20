@@ -80,6 +80,9 @@ add_ugrp wheel tty disk lp audio video cdrom optical storage network input users
 # choose your kernel version
 add_pkg "linux5.4"
 
+# needed for proprietary nvidia and likely a few other things
+#add_pkg "linux5.4-headers"
+
 # firmware packages, uncomment the ones you want
 add_pkg "linux-firmware-intel"
 #add_pkg "linux-firmware-amd"
@@ -215,14 +218,14 @@ command -v yes >/dev/null 2>&1 || yes() { while :;do printf "%s\n" "${1:-y}";don
 command -v unset >/dev/null 2>&1 || eval 'unset() { for _k in "$@"; do eval "$_k="; eval "$_k() { return 127; }"; done; _k=""; }'
 
 # prompt the user for an option and optionally provide the default
-chopt() { printf "\n\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && return; test -n "$2" && printf "$2"; }
+chopt() { printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1A\033[0J" >&2 && return; test -n "$2" && printf "\033[1A\033[0J" >&2 && printf "$2"; }
 
 # create a menu
 chmenu() {
-    printf "\n\033[1m$1\033[22m\n" >&2; shift
-    itmc="$#"; for itm in "$@"; do itmc="$((itmc-1))"; printf "\033[1m[\033[36m%s\033[39m]\033[22m %s\n" "$(($#-itmc))" "$itm" >&2; done
-    while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$#\033[39m]\033[22m " >&2; read inum; test "$inum" -gt "0" -a "$inum" -le "$#" >&- 2>&- && break; done
-    eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
+    printf "\033[1m$1\033[22m\n" >&2; linec="$(printf "$1\n" | wc -l 2>/dev/null || printf "1")"; shift
+    itmc="$#"; linec="$(($#+linec))"; for itm in "$@"; do itmc="$((itmc-1))"; printf "\033[1m[\033[36m%s\033[39m]\033[22m %s\n" "$(($#-itmc))" "$itm" >&2; done
+    while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$#\033[39m]\033[22m " >&2; linec="$((linec+1))"; read inum; test "$inum" -gt "0" -a "$inum" -le "$#" >&- 2>&- && break; done
+    printf "\033[${linec}A\033[0J" >&2; eval "printf \"$(test "$nummode" = "y" || printf '$')$inum\""
 }
 
 # only used for 1 thing...
@@ -240,11 +243,12 @@ mkuser() {
         printf "\n\033[1mConfirm password:\033[0m "
         eval 'read user_'"$userct"'_pwconfirm'
         stty echo 2>/dev/null
-        eval 'test "$user_'"$userct"'_password" != "$user_'"$userct"'_pwconfirm"' && printf "\nerror: Passwords do not match" && continue
-        eval 'test -z "$user_'"$userct"'_password" -o -z "$user_'"$userct"'_pwconfirm"' && printf "\nerror: Password cannot be blank" && continue
+        eval 'test "$user_'"$userct"'_password" != "$user_'"$userct"'_pwconfirm"' && printf "\033[1F\033[0Jerror: Passwords do not match\n" && ((sleep 1.5 || return 0; printf "\0337\033[s\033[1F\033[2K\0338\033[u") &) && continue
+        eval 'test -z "$user_'"$userct"'_password" -o -z "$user_'"$userct"'_pwconfirm"' && printf "\033[1F\033[0Jerror: Password cannot be blank\n" && ((sleep 1.5 || return 0; printf "\0337\033[s\033[1F\033[2K\0338\033[u") &) && continue
         printf "\n"
         break
     done
+    printf "\033[1A\033[0J" >&2
     eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "$GROUPS")"'
     eval 'user_'"$userct"'_shell="$(chopt "What shell should $user_'"$userct"'_name use?" "/bin/bash")"'
     return 0
@@ -318,6 +322,7 @@ exit_signal() {
     while ! is_empty "$vdir/run"; do (run umount -R "$vdir/run"); done
     while ! is_empty "$vdir/proc"; do (run umount -R "$vdir/proc"); done
     while ! is_empty "$vdir"; do (run umount -R "$vdir"); done
+    in_progress=""
     test -e "/dev/$luks_vgroup_name/$lvm_main_vol_name" && in_progress="y" && (run lvchange -an "/dev/$luks_vgroup_name/$lvm_main_vol_name") && in_progress=""
     test -e "/dev/mapper/$luks_container_name" && in_progress="y" && (run cryptsetup -q luksClose "/dev/mapper/$luks_container_name") && in_progress=""
     test "$in_progress" = "y" && printf "\033[1;33mWarning\033[39m:\033[22m %s was not freed cleanly and might still be in use.\n" "$disk"
@@ -386,14 +391,17 @@ done
 
 # if no disks are available, exit
 test -z "$disk1" && error "no devices available for installation"
+linec="$((diskct+1))"
 
 # read the user's choice
 while true; do
     printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$diskct\033[39m]\033[22m "
+    linec="$((linec+1))"
     read inum
     test "$inum" -gt 0 -a "$inum" -le "$diskct" >&- 2>&- && break
 done
 eval "disk=\"\$disk$inum\""
+printf "\033[${linec}A\033[0J"
 unset inum
 
 # decide how to partition $disk
@@ -420,26 +428,28 @@ while mkuser; do
 done
 
 # get root password
+linec="1"
 while true; do
     stty -echo 2>/dev/null
-    printf "\n\033[1mWhat do you want to set as the root password?\033[22m [ENTER=%s] " "$(test -n "$user_1_password" && printf '\033[3;94m$user_1_password\033[0m' || printf "1234")"
+    printf "\033[1mWhat do you want to set as the root password?\033[22m [ENTER=%s] " "$(test -n "$user_1_password" && printf '\033[3;94m$user_1_password\033[0m' || printf "1234")"
     read root_password && root_pwconfirm=""
     test -z "$root_password" -a -n "$user_1_password" && root_password="$user_1_password" && root_pwconfirm="$root_password"
     test -z "$root_password" && root_password="1234"
     while test -z "$root_pwconfirm"; do
+        printf "\033[1A\033[0J"
         printf "\n\033[1mConfirm password:\033[0m "
         read root_pwconfirm
     done
-    test "$root_password" != "$root_pwconfirm" && printf "\nerror: Passwords do not match" && continue
+    test "$root_password" != "$root_pwconfirm" && printf "\033[1F\033[0Jerror: Passwords do not match\n" && ((sleep 1.5 || return 0; printf "\0337\033[s\033[1F\033[2K\0338\033[u") &) && continue
     stty echo 2>/dev/null
-    printf "\n"
+    printf "\n\033[$((linec+1))F\033[0J\n"
     break
 done
 
 # ask the user whether to proceed
 test "$partmethod" != "manual" -a "$warn" != "n" && (
 test "$(chmenu "Disk $disk has been selected for automatic partitioning, which will\noverwrite the current data and partition table. Do you want to continue?" "yes" "no")" != "yes" && return 0
-test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "exited\n" >&2 && exit 0
+test "$(chmenu "\033[33mFINAL WARNING\033[39m: All the contents of $disk will be \033[31mLOST\033[39m during\nautomatic partitioning. Are you SURE you want to continue?" "yes" "no")" != "yes") && printf "\033[1A\033[0Jexited\n" >&2 && exit 0
 
 # if partitioning is being done manually
 test "$partmethod" = "manual" -a "$warn" != "n" && while true; do
@@ -564,6 +574,9 @@ for f in $(find "$vdir/usr/share/xbps.d" -type f); do
     run chroot "$vdir" sed "s/repo-default.voidlinux.org/$mirror/g" -i "${f##$vdir}"
 done
 
+# these are bloat
+test -d "$vdir/etc/xbps.d" && sudo printf "ignore=linux\nignore=linux-headers\nignore=linux-base\nignore=sudo\n" >>"$vdir/etc/xbps.d/10-ignore.conf"
+
 # update existing packages
 run chroot "$vdir" xbps-install -Sfyu
 
@@ -572,7 +585,7 @@ run chroot "$vdir" xbps-install -fy $PACKAGES
 
 # install nonfree packages
 test -n "$NONFREE_PACKAGES" &&
-run chroot "$vdir" xbps-install -fy $NONFREE_PACKAGES
+run chroot "$vdir" xbps-install -Sfy $NONFREE_PACKAGES
 
 # remove packages
 test -n "$DEL_PACKAGES" &&
