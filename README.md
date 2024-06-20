@@ -7,3 +7,4 @@
   - also add support for using `plain` dm-crypt, which would allow deniable encryption
 - syncthing/similar "cloud" file syncing
 - configure [macchanger](https://github.com/alobbs/macchanger) service
+- maybe set up an automount daemon, if there's one that isn't too bloated
