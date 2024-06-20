@@ -218,10 +218,11 @@ command -v yes >/dev/null 2>&1 || yes() { while :;do printf "%s\n" "${1:-y}";don
 command -v unset >/dev/null 2>&1 || eval 'unset() { for _k in "$@"; do eval "$_k="; eval "$_k() { return 127; }"; done; _k=""; }'
 
 # prompt the user for an option and optionally provide the default
-chopt() { printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1F\033[0J" >&2 && return; test -n "$2" && printf "\033[1F\033[0J" >&2 && printf "$2"; }
+chopt() { test ! -t 0 && printf "%s: error: stdin must be a terminal\n" "${0##*/}" >&2 && exit 4printf "\033[1m%s\033[22m%s " "$1" "${2:+ [ENTER=$2]}" >&2; read userch; test -n "$userch" && printf "$userch" && printf "\033[1F\033[0J" >&2 && return; test -n "$2" && printf "\033[1F\033[0J" >&2 && printf "$2"; }
 
 # create a menu
 chmenu() {
+    test ! -t 0 && printf "%s: error: chmenu: stdin must be a terminal\n" "${0##*/}" >&2 && exit 4
     printf "\033[1m$1\033[22m\n" >&2; linec="$(printf "$1\n" | wc -l 2>/dev/null || printf "1")"; shift
     itmc="$#"; linec="$(($#+linec))"; for itm in "$@"; do itmc="$((itmc-1))"; printf "\033[1m[\033[36m%s\033[39m]\033[22m %s\n" "$(($#-itmc))" "$itm" >&2; done
     while true; do printf "\033[1mEnter your choice [\033[36m1\033[39m-\033[36m$#\033[39m]\033[22m " >&2; linec="$((linec+1))"; read inum; test "$inum" -gt "0" -a "$inum" -le "$#" >&- 2>&- && break; done
@@ -377,6 +378,9 @@ trap "exit_signal" EXIT
 
 # Step 3: user-interactive script configuration
 # ------------------------------------------------------------------------------
+
+# we need stdin
+test ! -t 0 && printf "%s: error: stdin must be a terminal\n" "${0##*/}" >&2 && exit 4
 
 # menu title
 printf "\n\033[1mWhich disk would you like to install to?\033[22m\n"
