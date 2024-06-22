@@ -69,7 +69,7 @@ keep_cache="y"
 warn=""
 
 # generally useful system packages
-add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi kmod lvm2 lz4 opendoas openssl psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"
+add_pkg "acpid cryptsetup dracut dhcpcd efibootmgr ethtool eudev grub grub-x86_64-efi iproute2 kmod lvm2 lz4 opendoas openssl psmisc tree usbutils void-repo-nonfree wifi-firmware wpa_supplicant xz"
 
 # we don't need these
 del_pkg "base-container-full sudo"
