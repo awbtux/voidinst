@@ -250,7 +250,8 @@ mkuser() {
         break
     done
     printf "\033[1F\033[0J" >&2
-    eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "$GROUPS")"'
+    eval 'user_'"$userct"'_groups="$(chopt "What groups should $user_'"$userct"'_name be in?" "auto")"'
+    eval 'test "$user_'"$userct"'_groups" = "auto" && user_'"$userct"'_groups="$GROUPS"'
     eval 'user_'"$userct"'_shell="$(chopt "What shell should $user_'"$userct"'_name use?" "/bin/bash")"'
     return 0
 }
